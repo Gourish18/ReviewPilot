@@ -14,42 +14,14 @@ Features
 💬 Automatic GitHub PR Comment Publishing
 📊 Review History Dashboard
 📄 Detailed Review Report Pages
-Architecture
-GitHub Pull Request
-        ↓
-GitHub Webhook
-        ↓
-Express Backend
-        ↓
-PR Diff Retrieval
-        ↓
-LangGraph Workflow
 
- ┌──────────────┐
- │ Triage Node  │
- └──────┬───────┘
-        ↓
- ┌──────────────┐
- │ Security Node│
- └──────┬───────┘
-        ↓
- ┌──────────────┐
- │  Logic Node  │
- └──────┬───────┘
-        ↓
- ┌──────────────┐
- │Aggregation   │
- └──────┬───────┘
-        ↓
+Architecture:-<img width="2816" height="1536" alt="Gemini_Generated_Image_nn9h66nn9h66nn9h" src="https://github.com/user-attachments/assets/20f4faf5-fc08-42bd-804c-4c9d8f1e36d7" />
 
- Gemini Review
-        ↓
 
- MongoDB Storage
-        ↓
 
- GitHub Comment
-Tech Stack
+
+
+Tech Stack:-
 Frontend
 Next.js 16
 React
