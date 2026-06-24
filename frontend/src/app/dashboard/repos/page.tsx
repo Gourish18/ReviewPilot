@@ -16,7 +16,8 @@ interface GitHubRepo {
   language: string | null;
   private: boolean;
 }
-
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function RepositoriesPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -33,7 +34,7 @@ export default function RepositoriesPage() {
   } = useQuery<{ repositories: GitHubRepo[]; pagination: any }>({
     queryKey: ['github_repos', token],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/repositories', {
+      const res = await fetch(`${API_URL}/api/repositories`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -51,7 +52,7 @@ export default function RepositoriesPage() {
   // 2. Connect repository mutation
   const connectMutation = useMutation({
     mutationFn: async (repo: { githubRepoId: number; owner: string; name: string }) => {
-      const res = await fetch('http://localhost:8000/api/repositories/connect', {
+      const res = await fetch(`${API_URL}/api/repositories/connect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

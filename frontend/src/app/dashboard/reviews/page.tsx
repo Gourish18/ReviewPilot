@@ -18,7 +18,8 @@ interface ReviewItem {
   status: 'pending' | 'completed' | 'failed';
   createdAt: string;
 }
-
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function ReviewsPage() {
   const { token } = useAuth();
   const [page, setPage] = useState(1);
@@ -36,11 +37,14 @@ export default function ReviewsPage() {
   } = useQuery<{ reviews: ReviewItem[]; pagination: any }>({
     queryKey: ['reviews_history', token, page],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:8000/api/reviews?page=${page}&limit=${limit}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const res = await fetch(
+        `${API_URL}/api/reviews?page=${page}&limit=${limit}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
       if (!res.ok) {
         throw new Error('Failed to fetch review history from the server.');
       }
@@ -141,7 +145,7 @@ export default function ReviewsPage() {
                     <td className="p-4 font-semibold text-neutral-400">
                       {log.repositoryFullName}
                     </td>
-                    
+
                     {/* PR Title */}
                     <td className="p-4">
                       <div className="flex items-center gap-1.5">
@@ -149,33 +153,31 @@ export default function ReviewsPage() {
                         <span className="text-[10px] text-neutral-500 font-mono">#{log.prNumber}</span>
                       </div>
                     </td>
-                    
+
                     {/* Status */}
                     <td className="p-4">
-                      <span className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded border ${
-                        log.status === 'completed' 
-                          ? 'text-emerald-500 bg-emerald-950/10 border-emerald-950' 
-                          : log.status === 'pending'
+                      <span className={`text-[10px] uppercase font-bold tracking-wide px-2 py-0.5 rounded border ${log.status === 'completed'
+                        ? 'text-emerald-500 bg-emerald-950/10 border-emerald-950'
+                        : log.status === 'pending'
                           ? 'text-amber-500 bg-amber-950/10 border-amber-950 animate-pulse'
                           : 'text-red-500 bg-red-950/10 border-red-950'
-                      }`}>
+                        }`}>
                         {log.status}
                       </span>
                     </td>
 
                     {/* Triage Category */}
                     <td className="p-4">
-                      <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${
-                        log.triageCategory === 'security'
-                          ? 'text-red-400 bg-red-950/10 border-red-950'
-                          : log.triageCategory === 'backend'
+                      <span className={`text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${log.triageCategory === 'security'
+                        ? 'text-red-400 bg-red-950/10 border-red-950'
+                        : log.triageCategory === 'backend'
                           ? 'text-blue-400 bg-blue-950/10 border-blue-950'
                           : log.triageCategory === 'frontend'
-                          ? 'text-pink-400 bg-pink-950/10 border-pink-950'
-                          : log.triageCategory === 'infrastructure'
-                          ? 'text-purple-400 bg-purple-950/10 border-purple-950'
-                          : 'text-neutral-400 bg-neutral-950 border-neutral-900'
-                      }`}>
+                            ? 'text-pink-400 bg-pink-950/10 border-pink-950'
+                            : log.triageCategory === 'infrastructure'
+                              ? 'text-purple-400 bg-purple-950/10 border-purple-950'
+                              : 'text-neutral-400 bg-neutral-950 border-neutral-900'
+                        }`}>
                         {log.triageCategory || 'general'}
                       </span>
                     </td>

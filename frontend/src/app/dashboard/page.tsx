@@ -3,12 +3,12 @@
 import React from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  GitPullRequest, 
-  Layers, 
-  ShieldAlert, 
-  Plus, 
-  ToggleRight, 
+import {
+  GitPullRequest,
+  Layers,
+  ShieldAlert,
+  Plus,
+  ToggleRight,
   ChevronRight,
   TrendingUp,
   Clock,
@@ -30,20 +30,20 @@ interface ReviewItem {
   status: 'pending' | 'completed' | 'failed';
   createdAt: string;
 }
-
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 // Helper to format timestamps to a friendly relative string
 const formatTimeAgo = (dateString: string): string => {
   const date = new Date(dateString);
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
-  
+
   if (seconds < 60) return 'Just now';
-  
+
   const minutes = Math.floor(seconds / 60);
   if (minutes < 60) return `${minutes}m ago`;
-  
+
   const hours = Math.floor(minutes / 60);
   if (hours < 24) return `${hours}h ago`;
-  
+
   const days = Math.floor(hours / 24);
   return `${days}d ago`;
 };
@@ -53,14 +53,14 @@ export default function DashboardOverview() {
   const queryClient = useQueryClient();
 
   // 1. Fetch connected repositories from database
-  const { 
-    data: reposData, 
+  const {
+    data: reposData,
     isLoading: isLoadingRepos,
     isError: isReposError
   } = useQuery<{ repositories: any[]; pagination: any }>({
     queryKey: ['connected_repos', token],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/repositories', {
+      const res = await fetch(`${API_URL}/api/repositories`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -86,7 +86,7 @@ export default function DashboardOverview() {
   } = useQuery<{ reviews: ReviewItem[]; pagination: any }>({
     queryKey: ['recent_reviews', token],
     queryFn: async () => {
-      const res = await fetch('http://localhost:8000/api/reviews?page=1&limit=5', {
+      const res = await fetch(`${API_URL}/api/reviews?page=1&limit=5`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -105,7 +105,7 @@ export default function DashboardOverview() {
   // 3. Disconnect repository mutation
   const disconnectMutation = useMutation({
     mutationFn: async (githubRepoId: number) => {
-      const res = await fetch('http://localhost:8000/api/repositories/disconnect', {
+      const res = await fetch(`${API_URL}/api/repositories/disconnect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -200,14 +200,14 @@ export default function DashboardOverview() {
 
       {/* Main Grid: Active Repos & Recent reviews */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
+
         {/* Left Column: Repository Switcher */}
         <div className="lg:col-span-1 space-y-6">
           <div className="border border-neutral-900 bg-neutral-950 rounded-lg overflow-hidden">
             <div className="border-b border-neutral-900 px-6 py-4 bg-neutral-950/80">
               <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Monitored Repositories</h2>
             </div>
-            
+
             <div className="divide-y divide-neutral-900">
               {isLoadingRepos ? (
                 Array.from({ length: 3 }).map((_, idx) => (
@@ -234,7 +234,7 @@ export default function DashboardOverview() {
                         AI reviews active
                       </span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => disconnectMutation.mutate(repo.githubRepoId)}
                       disabled={disconnectMutation.isPending}
                       className="text-neutral-400 hover:text-white transition-colors cursor-pointer disabled:opacity-50"
@@ -260,7 +260,7 @@ export default function DashboardOverview() {
           <div className="border border-neutral-900 bg-neutral-950 rounded-lg overflow-hidden">
             <div className="border-b border-neutral-900 px-6 py-4 bg-neutral-950/80 flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Recent Pull Request Audits</h2>
-              <button 
+              <button
                 onClick={() => refetchReviews()}
                 disabled={isLoadingReviews || isFetchingReviews}
                 className="text-[10px] text-neutral-500 hover:text-white transition-colors flex items-center gap-1 cursor-pointer"
@@ -294,15 +294,14 @@ export default function DashboardOverview() {
                   <div key={review.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-950/30 transition-colors">
                     <div className="flex items-start gap-3.5 min-w-0">
                       <div className="w-8 h-8 rounded-full border border-neutral-800 flex-shrink-0 bg-neutral-900 flex items-center justify-center">
-                        <GitPullRequest className={`w-4.5 h-4.5 ${
-                          review.status === 'completed' 
-                            ? 'text-emerald-500' 
-                            : review.status === 'pending'
+                        <GitPullRequest className={`w-4.5 h-4.5 ${review.status === 'completed'
+                          ? 'text-emerald-500'
+                          : review.status === 'pending'
                             ? 'text-amber-500 animate-pulse'
                             : 'text-red-500'
-                        }`} />
+                          }`} />
                       </div>
-                      
+
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-semibold text-white truncate">
@@ -317,7 +316,7 @@ export default function DashboardOverview() {
                             </span>
                           )}
                         </div>
-                        
+
                         <div className="flex items-center gap-2 text-[10px] text-neutral-500 mt-1">
                           <span>{review.repositoryOwner}/{review.repositoryName}</span>
                           <span>•</span>
@@ -329,20 +328,19 @@ export default function DashboardOverview() {
                     <div className="flex items-center justify-between sm:justify-end gap-6 shrink-0 border-t border-neutral-900 sm:border-0 pt-3 sm:pt-0">
                       {/* Status Badge */}
                       <div className="flex flex-col items-start sm:items-end">
-                        <span className={`text-[10px] uppercase font-bold tracking-wide ${
-                          review.status === 'completed' 
-                            ? 'text-emerald-500' 
-                            : review.status === 'pending'
+                        <span className={`text-[10px] uppercase font-bold tracking-wide ${review.status === 'completed'
+                          ? 'text-emerald-500'
+                          : review.status === 'pending'
                             ? 'text-amber-500'
                             : 'text-red-500'
-                        }`}>
+                          }`}>
                           {review.status}
                         </span>
                       </div>
 
                       {/* View Report Link */}
                       {review.status === 'completed' ? (
-                        <Link 
+                        <Link
                           href={`/dashboard/reviews/${review.id}`}
                           className="border border-neutral-800 bg-black hover:bg-neutral-900 hover:border-neutral-700 text-neutral-300 text-xs px-3 py-1.5 rounded transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
