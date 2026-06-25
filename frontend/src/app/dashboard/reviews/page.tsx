@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Search, ArrowUpRight, AlertCircle, RefreshCw, History, GitPullRequest } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface ReviewItem {
   id: string;
@@ -18,8 +19,6 @@ interface ReviewItem {
   status: 'pending' | 'completed' | 'failed';
   createdAt: string;
 }
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function ReviewsPage() {
   const { token } = useAuth();
   const [page, setPage] = useState(1);

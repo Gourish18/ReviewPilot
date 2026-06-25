@@ -17,6 +17,7 @@ import {
   LogOut
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface NavItem {
   name: string;
@@ -38,7 +39,7 @@ export default function DashboardLayout({
   useEffect(() => {
     const checkApi = async () => {
       try {
-        const res = await fetch('http://localhost:8000/health');
+        const res = await fetch(`${API_URL}/health`);
         if (res.ok) {
           setApiStatus('connected');
         } else {

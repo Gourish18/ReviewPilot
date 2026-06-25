@@ -17,6 +17,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface ReviewItem {
   id: string;
@@ -30,7 +31,7 @@ interface ReviewItem {
   status: 'pending' | 'completed' | 'failed';
   createdAt: string;
 }
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
 // Helper to format timestamps to a friendly relative string
 const formatTimeAgo = (dateString: string): string => {
   const date = new Date(dateString);

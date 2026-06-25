@@ -18,6 +18,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface ReviewDetail {
   id: string;
@@ -53,7 +54,7 @@ export default function ReviewDetailPage() {
   } = useQuery<ReviewDetail>({
     queryKey: ['review_detail', reviewId, token],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:8000/api/reviews/${reviewId}`, {
+      const res = await fetch(`${API_URL}/api/reviews/${reviewId}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },

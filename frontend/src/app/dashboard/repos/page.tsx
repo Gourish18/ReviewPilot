@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Layers, Search, Check, Plus, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface GitHubRepo {
   id: string | null;
@@ -16,8 +17,6 @@ interface GitHubRepo {
   language: string | null;
   private: boolean;
 }
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function RepositoriesPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
@@ -73,7 +72,7 @@ export default function RepositoriesPage() {
   // 3. Disconnect repository mutation
   const disconnectMutation = useMutation({
     mutationFn: async (githubRepoId: number) => {
-      const res = await fetch('http://localhost:8000/api/repositories/disconnect', {
+      const res = await fetch(`${API_URL}/api/repositories/disconnect`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -94,7 +93,7 @@ export default function RepositoriesPage() {
   // 4. Sync repositories mutation using POST /api/repositories/sync
   const syncMutation = useMutation({
     mutationFn: async () => {
-      const res = await fetch('http://localhost:8000/api/repositories/sync', {
+      const res = await fetch(`${API_URL}/api/repositories/sync`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

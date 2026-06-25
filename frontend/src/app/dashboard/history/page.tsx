@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Search, ArrowUpRight, AlertCircle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
 interface ReviewItem {
   id: string;
@@ -36,7 +37,7 @@ export default function HistoryPage() {
   } = useQuery<{ reviews: ReviewItem[]; pagination: any }>({
     queryKey: ['reviews_history', token, page],
     queryFn: async () => {
-      const res = await fetch(`http://localhost:8000/api/reviews?page=${page}&limit=${limit}`, {
+      const res = await fetch(`${API_URL}/api/reviews?page=${page}&limit=${limit}`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
