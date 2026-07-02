@@ -37,6 +37,7 @@ export default function DashboardLayout({
 
   // Check backend API connection
   useEffect(() => {
+    console.log('[ReviewPilot API Monitor] Active Config:', { API_URL, environment: process.env.NODE_ENV });
     const checkApi = async () => {
       const maxRetries = 3;
       let attempt = 0;
