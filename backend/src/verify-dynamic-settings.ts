@@ -3,7 +3,7 @@ import { env } from './config/env.js';
 import { Repository } from './models/Repository.js';
 import { User } from './models/User.js';
 import { UserSettings } from './models/UserSettings.js';
-import { getModelForUser } from './services/review/llm.ts';
+import { getModelForUser } from './services/review/llm.js';
 
 const testSettingsAndWebhooks = async () => {
   console.log('Connecting to database...');
