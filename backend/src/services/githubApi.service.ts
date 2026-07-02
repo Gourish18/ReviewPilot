@@ -151,3 +151,131 @@ export async function fetchUserRepositories(accessToken: string): Promise<IGithu
     throw new Error(`Failed to fetch user repositories: ${error.message}`);
   }
 }
+
+/**
+ * Checks for an existing ReviewPilot webhook on GitHub, creates one if missing, or updates it if found.
+ * Returns the GitHub webhook ID.
+ */
+export async function createOrUpdateWebhook(
+  accessToken: string,
+  owner: string,
+  repoName: string,
+  backendUrl: string,
+  webhookSecret: string
+): Promise<number> {
+  if (accessToken.startsWith('mock_')) {
+    console.log('[Mock GitHub API] Simulating webhook creation');
+    return 123456789;
+  }
+
+  const payloadUrl = `${backendUrl}/api/webhooks/github`;
+  const listUrl = `https://api.github.com/repos/${owner}/${repoName}/hooks?per_page=100`;
+
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'ReviewPilot-Backend',
+  };
+
+  // 1. Check if webhook already exists
+  const listRes = await fetch(listUrl, { headers });
+  if (!listRes.ok) {
+    throw new Error(`GitHub API error listing webhooks: ${listRes.status} ${listRes.statusText}`);
+  }
+
+  const hooks = (await listRes.json()) as any[];
+  const existingHook = hooks.find(h => h.config && h.config.url === payloadUrl);
+
+  if (existingHook) {
+    console.log(`Webhook already exists for ${owner}/${repoName} with ID ${existingHook.id}. Updating configuration...`);
+    
+    // Update existing webhook
+    const updateUrl = `https://api.github.com/repos/${owner}/${repoName}/hooks/${existingHook.id}`;
+    const updateRes = await fetch(updateUrl, {
+      method: 'PATCH',
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        config: {
+          url: payloadUrl,
+          content_type: 'application/json',
+          secret: webhookSecret,
+          insecure_ssl: '0', // SSL verification enabled
+        },
+        events: ['pull_request'],
+        active: true,
+      }),
+    });
+
+    if (!updateRes.ok) {
+      throw new Error(`GitHub API error updating webhook: ${updateRes.status} ${updateRes.statusText}`);
+    }
+
+    return existingHook.id;
+  }
+
+  // 2. Create new webhook
+  console.log(`Creating new webhook for ${owner}/${repoName}...`);
+  const createUrl = `https://api.github.com/repos/${owner}/${repoName}/hooks`;
+  const createRes = await fetch(createUrl, {
+    method: 'POST',
+    headers: {
+      ...headers,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: 'web',
+      active: true,
+      events: ['pull_request'],
+      config: {
+        url: payloadUrl,
+        content_type: 'application/json',
+        secret: webhookSecret,
+        insecure_ssl: '0',
+      },
+    }),
+  });
+
+  if (!createRes.ok) {
+    const errorBody = await createRes.text().catch(() => '');
+    throw new Error(`GitHub API error creating webhook: ${createRes.status} ${createRes.statusText}. Details: ${errorBody}`);
+  }
+
+  const newHook = await createRes.json();
+  return newHook.id;
+}
+
+/**
+ * Deletes a registered webhook from GitHub.
+ */
+export async function deleteWebhook(
+  accessToken: string,
+  owner: string,
+  repoName: string,
+  webhookId: number
+): Promise<void> {
+  if (accessToken.startsWith('mock_')) {
+    console.log('[Mock GitHub API] Simulating webhook deletion');
+    return;
+  }
+
+  const deleteUrl = `https://api.github.com/repos/${owner}/${repoName}/hooks/${webhookId}`;
+  const headers = {
+    'Authorization': `Bearer ${accessToken}`,
+    'Accept': 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'ReviewPilot-Backend',
+  };
+
+  const deleteRes = await fetch(deleteUrl, {
+    method: 'DELETE',
+    headers,
+  });
+
+  if (!deleteRes.ok && deleteRes.status !== 404) {
+    throw new Error(`GitHub API error deleting webhook: ${deleteRes.status} ${deleteRes.statusText}`);
+  }
+}

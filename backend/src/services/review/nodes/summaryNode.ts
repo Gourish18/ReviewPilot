@@ -1,5 +1,5 @@
 import type { ReviewState } from "../reviewState.js";
-import { geminiModel } from "../llm.js";
+import { getModelForUser } from "../llm.js";
 
 export const summaryNode = async (
   state: ReviewState
@@ -79,7 +79,8 @@ Generate the report using the following structure:
 *Reason:* [1-sentence explanation]
 `;
 
-  const response = await geminiModel.invoke(prompt);
+  const model = await getModelForUser(state.userId);
+  const response = await model.invoke(prompt);
 
   return {
     finalReviewMarkdown: response.content.toString(),

@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { env } from '../config/env.js';
 import { exchangeCodeForToken, getGithubUser } from '../services/githubOAuth.service.js';
 import { User } from '../models/User.js';
+import { UserSettings } from '../models/UserSettings.js';
 import { generateToken } from '../services/token.service.js';
 
 /**
@@ -83,6 +84,12 @@ export const githubCallback = async (req: Request, res: Response): Promise<void>
     if (!user) {
       res.status(500).json({ error: 'Database error: failed to retrieve or create user' });
       return;
+    }
+
+    // Ensure UserSettings exists for the logged in user
+    const existingSettings = await UserSettings.findOne({ userId: user._id });
+    if (!existingSettings) {
+      await UserSettings.create({ userId: user._id });
     }
 
     // Step 5: Generate ReviewPilot JWT containing only application identity (userId)

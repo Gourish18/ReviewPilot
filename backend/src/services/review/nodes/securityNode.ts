@@ -1,11 +1,12 @@
 import { z } from "zod"
 import type { ReviewState } from "../reviewState.js"
-import { geminiModel } from "../llm.js"
+import { getModelForUser } from "../llm.js"
 const schema = z.object({
     findings: z.array(z.string()).describe("A list of security vulnerabilities found in the code. Empty array if none."),
 });
-const structuredLlm = geminiModel.withStructuredOutput(schema);
 export const securityNode = async (state: ReviewState): Promise<Partial<ReviewState>> => {
+    const model = await getModelForUser(state.userId);
+    const structuredLlm = model.withStructuredOutput(schema);
     const diffSample = state.diff.slice(0, 8000);
 
     const prompt = `

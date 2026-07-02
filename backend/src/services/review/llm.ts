@@ -88,7 +88,10 @@
 //     });
 
 import { ChatGoogleGenerativeAI } from "@langchain/google-genai";
+import { ChatOpenAI } from "@langchain/openai";
+import { ChatAnthropic } from "@langchain/anthropic";
 import { env } from "../../config/env.js";
+import { UserSettings } from "../../models/UserSettings.js";
 
 const isMockKey =
   !env.geminiApiKey ||
@@ -334,12 +337,99 @@ The reviewed changes contain areas that could benefit from additional validation
   }
 }
 
+// Model Cache map to store instantiated LangChain model instances
+const modelCache = new Map<string, any>();
+
+/**
+ * Factory function to retrieve the configured LangChain chat model for a specific user.
+ * Supports OpenAI, Anthropic, Gemini, and Local LLMs.
+ */
+export const getModelForUser = async (userId: string): Promise<any> => {
+  let provider = 'gemini';
+  let modelName = 'gemini-2.5-flash';
+  let temp = 0.1;
+  let maxTokens = 2048;
+
+  if (userId) {
+    try {
+      const settings = await UserSettings.findOne({ userId });
+      if (settings) {
+        provider = settings.preferredLLMProvider || 'gemini';
+        modelName = settings.preferredModel || 'gemini-2.5-flash';
+        temp = settings.temperature !== undefined ? settings.temperature : 0.1;
+        maxTokens = settings.maxTokens || 2048;
+      }
+    } catch (err) {
+      console.error('Failed to load user settings in getModelForUser:', err);
+    }
+  }
+
+  // Generate cache key
+  const cacheKey = `${provider}:${modelName}:${temp}:${maxTokens}`;
+  if (modelCache.has(cacheKey)) {
+    return modelCache.get(cacheKey);
+  }
+
+  if (isMockKey) {
+    const mock = new MockGoogleGenerativeAI();
+    modelCache.set(cacheKey, mock);
+    return mock;
+  }
+
+  let modelInstance: any;
+
+  switch (provider) {
+    case 'openai':
+      modelInstance = new ChatOpenAI({
+        modelName: modelName,
+        temperature: temp,
+        maxTokens: maxTokens,
+        openAIApiKey: process.env.OPENAI_API_KEY || 'mock_key',
+      });
+      break;
+
+    case 'anthropic':
+      modelInstance = new ChatAnthropic({
+        modelName: modelName,
+        temperature: temp,
+        maxTokens: maxTokens,
+        anthropicApiKey: process.env.ANTHROPIC_API_KEY || 'mock_key',
+      });
+      break;
+
+    case 'local':
+      modelInstance = new ChatOpenAI({
+        modelName: modelName,
+        temperature: temp,
+        maxTokens: maxTokens,
+        configuration: {
+          baseURL: process.env.LOCAL_LLM_BASE_URL || 'http://localhost:11434/v1',
+          apiKey: 'local',
+        }
+      });
+      break;
+
+    case 'gemini':
+    default:
+      modelInstance = new ChatGoogleGenerativeAI({
+        apiKey: env.geminiApiKey,
+        model: modelName,
+        temperature: temp,
+        maxOutputTokens: maxTokens,
+      });
+      break;
+  }
+
+  modelCache.set(cacheKey, modelInstance);
+  return modelInstance;
+};
+
 export const geminiModel = isMockKey
   ? (new MockGoogleGenerativeAI() as unknown as ChatGoogleGenerativeAI)
   : new ChatGoogleGenerativeAI({
-    apiKey: env.geminiApiKey,
-    model: "gemini-2.5-flash",
-    temperature: 0.1,
-  });
+      apiKey: env.geminiApiKey,
+      model: "gemini-2.5-flash",
+      temperature: 0.1,
+    });
 
 

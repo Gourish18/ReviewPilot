@@ -1,8 +1,14 @@
 import { Request, Response } from 'express';
 import { User } from '../models/User.js';
 import { Repository } from '../models/Repository.js';
-import { fetchUserRepositories, GithubRateLimitError } from '../services/githubApi.service.js';
+import { 
+  fetchUserRepositories, 
+  GithubRateLimitError,
+  createOrUpdateWebhook,
+  deleteWebhook
+} from '../services/githubApi.service.js';
 import { syncRepositories } from '../services/repositorySync.service.js';
+import { env } from '../config/env.js';
 
 /**
  * Synchronizes the authenticated user's GitHub repositories to ReviewPilot's database.
@@ -151,7 +157,31 @@ export const getUserRepositories = async (
 };
 
 /**
- * Connects a repository to activate AI reviews.
+ * Helper to check repository admin permissions on GitHub
+ */
+const verifyAdminPermission = async (accessToken: string, owner: string, name: string): Promise<boolean> => {
+  if (accessToken.startsWith('mock_')) return true;
+  const url = `https://api.github.com/repos/${owner}/${name}`;
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'ReviewPilot-Backend',
+    }
+  });
+  if (!res.ok) {
+    if (res.status === 404) {
+      throw new Error('Repository not found on GitHub. Verify ownership and accessibility.');
+    }
+    throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
+  }
+  const data = await res.json();
+  return !!(data.permissions && data.permissions.admin);
+};
+
+/**
+ * Connects a repository to activate AI reviews by provisioning a webhook.
  */
 export const connectRepository = async (
   req: Request,
@@ -172,16 +202,53 @@ export const connectRepository = async (
   }
 
   try {
-    const repository = await Repository.findOneAndUpdate(
-      { userId, githubRepoId: targetRepoId },
-      { isConnected: true },
-      { returnDocument: 'after', runValidators: true }
-    );
-
-    if (!repository) {
-      res.status(404).json({ error: 'Repository not found or access denied' });
+    // 1. Retrieve User profile to get OAuth access token
+    const user = await User.findById(userId);
+    if (!user || !user.accessToken) {
+      res.status(401).json({ error: 'User profile or GitHub credentials missing.' });
       return;
     }
+
+    // 2. Find target repository
+    const repository = await Repository.findOne({ userId, githubRepoId: targetRepoId });
+    if (!repository) {
+      res.status(404).json({ error: 'Repository not found in ReviewPilot dashboard.' });
+      return;
+    }
+
+    // 3. Verify admin permissions on GitHub
+    let hasAdmin = false;
+    try {
+      hasAdmin = await verifyAdminPermission(user.accessToken, repository.owner, repository.name);
+    } catch (err: any) {
+      res.status(502).json({ error: `Permission check failed: ${err.message}` });
+      return;
+    }
+
+    if (!hasAdmin) {
+      res.status(403).json({ error: 'Permission denied: Admin access is required to manage webhooks on this repository.' });
+      return;
+    }
+
+    // 4. Create or update the GitHub Webhook automatically
+    let webhookId: number;
+    try {
+      webhookId = await createOrUpdateWebhook(
+        user.accessToken,
+        repository.owner,
+        repository.name,
+        env.backendUrl,
+        env.githubWebhookSecret
+      );
+    } catch (err: any) {
+      res.status(502).json({ error: `Webhook provisioning failed: ${err.message}` });
+      return;
+    }
+
+    // 5. Update connection and webhook details in database
+    repository.isConnected = true;
+    repository.webhookId = webhookId;
+    await repository.save();
 
     res.status(200).json({
       success: true,
@@ -193,18 +260,19 @@ export const connectRepository = async (
         fullName: repository.fullName,
         private: repository.private,
         isConnected: repository.isConnected,
+        webhookId: repository.webhookId,
         createdAt: repository.createdAt,
         updatedAt: repository.updatedAt
       }
     });
   } catch (error: any) {
     console.error('Failed to connect repository:', error);
-    res.status(500).json({ error: 'Database query failure' });
+    res.status(500).json({ error: error.message || 'Database query failure during connection' });
   }
 };
 
 /**
- * Disconnects a repository to deactivate AI reviews.
+ * Disconnects a repository and deletes its GitHub webhook.
  */
 export const disconnectRepository = async (
   req: Request,
@@ -225,16 +293,39 @@ export const disconnectRepository = async (
   }
 
   try {
-    const repository = await Repository.findOneAndUpdate(
-      { userId, githubRepoId: targetRepoId },
-      { isConnected: false },
-      { returnDocument: 'after', runValidators: true }
-    );
-
-    if (!repository) {
-      res.status(404).json({ error: 'Repository not found or access denied' });
+    // 1. Retrieve User profile to get OAuth access token
+    const user = await User.findById(userId);
+    if (!user || !user.accessToken) {
+      res.status(401).json({ error: 'User profile or GitHub credentials missing.' });
       return;
     }
+
+    // 2. Find target repository
+    const repository = await Repository.findOne({ userId, githubRepoId: targetRepoId });
+    if (!repository) {
+      res.status(404).json({ error: 'Repository not found in ReviewPilot dashboard.' });
+      return;
+    }
+
+    // 3. Delete GitHub Webhook if a webhookId is registered
+    if (repository.webhookId) {
+      try {
+        await deleteWebhook(
+          user.accessToken,
+          repository.owner,
+          repository.name,
+          repository.webhookId
+        );
+      } catch (err: any) {
+        console.error(`Failed to delete webhook ${repository.webhookId} from GitHub:`, err);
+        // Continue disconnecting in DB even if webhook delete on GitHub fails or webhook is already deleted (e.g. 404)
+      }
+    }
+
+    // 4. Update connection state in database
+    repository.isConnected = false;
+    repository.webhookId = null;
+    await repository.save();
 
     res.status(200).json({
       success: true,
@@ -246,12 +337,13 @@ export const disconnectRepository = async (
         fullName: repository.fullName,
         private: repository.private,
         isConnected: repository.isConnected,
+        webhookId: null,
         createdAt: repository.createdAt,
         updatedAt: repository.updatedAt
       }
     });
   } catch (error: any) {
     console.error('Failed to disconnect repository:', error);
-    res.status(500).json({ error: 'Database query failure' });
+    res.status(500).json({ error: error.message || 'Database query failure during disconnection' });
   }
 };

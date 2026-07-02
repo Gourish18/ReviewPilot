@@ -1,5 +1,5 @@
 import type { ReviewState } from "../reviewState.js";
-import { geminiModel } from "../llm.js";
+import { getModelForUser } from "../llm.js";
 const VALID_CATEGORIES = [
     "frontend",
     "backend",
@@ -111,7 +111,8 @@ docs
 general
 
 `;
-    const response = await geminiModel.invoke(prompt);
+    const model = await getModelForUser(state.userId);
+    const response = await model.invoke(prompt);
     const category = response.content.toString().trim().toLowerCase();
 
     return {

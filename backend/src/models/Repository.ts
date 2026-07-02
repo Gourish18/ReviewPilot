@@ -15,6 +15,7 @@ export interface IRepository {
   language?: string;
   private: boolean;
   isConnected: boolean;
+  webhookId?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +73,11 @@ const repositorySchema = new Schema<IRepository>(
       type: Boolean,
       required: true,
       default: false,
+    },
+    // webhookId stores the GitHub webhook ID automatically provisioned for this repository
+    webhookId: {
+      type: Number,
+      default: null,
     },
   },
   {

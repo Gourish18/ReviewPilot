@@ -13,6 +13,10 @@ export const ReviewStateAnnotation = Annotation.Root({
         reducer: (x, y) => y ?? x,
         default: () => ""
     }),
+    userId: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => ""
+    }),
     prDescription: Annotation<string>({
         reducer: (x, y) => y ?? x,
         default: () => "",

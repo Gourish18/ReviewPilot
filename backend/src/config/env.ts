@@ -34,6 +34,7 @@ export const env = {
   nodeEnv: (process.env.NODE_ENV ?? 'development') as NodeEnv,
   port: parsePort(process.env.PORT),
   frontendUrl: process.env.FRONTEND_URL ?? 'http://localhost:3000',
+  backendUrl: process.env.BACKEND_URL ?? process.env.RENDER_EXTERNAL_URL ?? `http://localhost:${process.env.PORT || 8000}`,
   mongodbUri: process.env.MONGODB_URI as string,
   githubClientId: process.env.GITHUB_CLIENT_ID as string,
   githubClientSecret: process.env.GITHUB_CLIENT_SECRET as string,
