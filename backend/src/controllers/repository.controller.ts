@@ -16,6 +16,7 @@ export const syncUserGithubRepositories = async (
   // Step 1: Validate req.userId exists (TypeScript safety)
   if (!userId) {
     res.status(401).json({ error: 'Unauthorized' });
+    console.log("unauthorized");
     return;
   }
 
