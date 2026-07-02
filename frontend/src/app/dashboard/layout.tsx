@@ -33,24 +33,85 @@ export default function DashboardLayout({
   const { user, isLoading, logout } = useAuth();
   const pathname = usePathname();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [apiStatus, setApiStatus] = useState<'connected' | 'checking' | 'disconnected'>('checking');
+  const [apiStatus, setApiStatus] = useState<'connected' | 'checking' | 'starting' | 'disconnected'>('checking');
 
   // Check backend API connection
   useEffect(() => {
     const checkApi = async () => {
-      try {
-        const res = await fetch(`${API_URL}/health`);
-        if (res.ok) {
-          setApiStatus('connected');
-        } else {
-          setApiStatus('disconnected');
+      const maxRetries = 3;
+      let attempt = 0;
+      let lastError: any = null;
+      let lastStatus: number | null = null;
+      let lastBody: string | null = null;
+      
+      const url = `${API_URL}/health`;
+
+      while (attempt < maxRetries) {
+        attempt++;
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+          const res = await fetch(url, { signal: controller.signal });
+          clearTimeout(timeoutId);
+
+          // Any response (even error status codes like 401, 403, 404, 500) 
+          // means the backend is reachable and online!
+          if (res.ok || [401, 403, 404, 500].includes(res.status)) {
+            setApiStatus('connected');
+            return;
+          }
+
+          // Gateway issues (502, 503, 504) indicate cold starting
+          if ([502, 503, 504].includes(res.status)) {
+            setApiStatus('starting');
+            lastStatus = res.status;
+            try {
+              lastBody = await res.text();
+            } catch {
+              lastBody = '(failed to read body)';
+            }
+            if (attempt < maxRetries) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+            continue;
+          }
+
+          lastStatus = res.status;
+          try {
+            lastBody = await res.text();
+          } catch {
+            lastBody = '(failed to read body)';
+          }
+        } catch (err: any) {
+          lastError = err;
+          
+          if (err.name === 'AbortError') {
+            setApiStatus('starting');
+          }
+          
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
         }
-      } catch {
-        setApiStatus('disconnected');
       }
+
+      // If all attempts failed, set to disconnected
+      setApiStatus('disconnected');
+
+      // Output diagnostics group for troubleshooting
+      console.group('ReviewPilot API Health Check Diagnostics');
+      console.error('API Health Check failed after %d attempts.', maxRetries);
+      console.log('Resolved API_URL:', API_URL);
+      console.log('Target Request URL:', url);
+      if (lastStatus !== null) console.log('Last HTTP Status Code:', lastStatus);
+      if (lastBody !== null) console.log('Last Response Body:', lastBody);
+      if (lastError !== null) console.error('Last Thrown Exception:', lastError);
+      console.groupEnd();
     };
+
     checkApi();
-    const interval = setInterval(checkApi, 10000);
+    const interval = setInterval(checkApi, 15000); // Check every 15 seconds
     return () => clearInterval(interval);
   }, []);
 
@@ -169,12 +230,18 @@ export default function DashboardLayout({
               <span className={`w-1.5 h-1.5 rounded-full ${
                 apiStatus === 'connected' 
                   ? 'bg-emerald-500 shadow-sm shadow-emerald-400' 
-                  : apiStatus === 'checking' 
+                  : apiStatus === 'starting' || apiStatus === 'checking'
                   ? 'bg-amber-500 animate-pulse' 
                   : 'bg-red-500'
               }`} />
               <span className="hidden sm:inline">
-                {apiStatus === 'connected' ? 'API Connected' : apiStatus === 'checking' ? 'Connecting API...' : 'API Offline'}
+                {apiStatus === 'connected' 
+                  ? 'API Connected' 
+                  : apiStatus === 'starting'
+                  ? 'Backend Starting...'
+                  : apiStatus === 'checking'
+                  ? 'Connecting API...'
+                  : 'API Offline'}
               </span>
             </div>
 

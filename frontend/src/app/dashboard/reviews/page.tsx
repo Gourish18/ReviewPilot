@@ -7,6 +7,12 @@ import { Search, ArrowUpRight, AlertCircle, RefreshCw, History, GitPullRequest }
 import { useAuth } from '@/context/auth-context';
 import { API_URL } from '@/config';
 
+interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
 interface ReviewItem {
   id: string;
   repositoryId: string;
@@ -33,7 +39,7 @@ export default function ReviewsPage() {
     error,
     refetch,
     isFetching
-  } = useQuery<{ reviews: ReviewItem[]; pagination: any }>({
+  } = useQuery<{ reviews: ReviewItem[]; pagination: Pagination }>({
     queryKey: ['reviews_history', token, page],
     queryFn: async () => {
       const res = await fetch(

@@ -5,6 +5,7 @@ import authRouter from './routes/auth.routes.js';
 import repositoryRouter from './routes/repository.routes.js';
 import webhookRouter from './routes/webhook.routes.js';
 import reviewRouter from './routes/review.routes.js';
+import dashboardRouter from './routes/dashboard.routes.js';
 import { requireAuth } from './middleware/requireAuth.js';
 
 export const app = express();
@@ -25,6 +26,7 @@ app.use(express.json({
 app.use('/api/auth', authRouter);
 app.use('/api/repositories', repositoryRouter);
 app.use('/api/reviews', reviewRouter);
+app.use('/api/dashboard', dashboardRouter);
 
 // Temporary test route to verify authentication middleware
 app.get('/api/test/protected', requireAuth, (req, res) => {
