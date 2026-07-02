@@ -5,6 +5,14 @@ export const ReviewStateAnnotation = Annotation.Root({
         reducer: (x, y) => y ?? x,
         default: () => ""
     }),
+    prNumber: Annotation<number>({
+        reducer: (x, y) => y ?? x,
+        default: () => 0
+    }),
+    repositoryName: Annotation<string>({
+        reducer: (x, y) => y ?? x,
+        default: () => ""
+    }),
     prDescription: Annotation<string>({
         reducer: (x, y) => y ?? x,
         default: () => "",

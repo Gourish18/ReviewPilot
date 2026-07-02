@@ -1,150 +1,82 @@
 import type { ReviewState } from "../reviewState.js";
 import { geminiModel } from "../llm.js";
+
 export const summaryNode = async (
   state: ReviewState
 ): Promise<Partial<ReviewState>> => {
   const {
     prTitle,
+    prNumber,
+    repositoryName,
+    filePaths,
+    diff,
     triageCategory,
     securityFindings,
     logicFindings,
   } = state;
 
-  const hasIssues =
-    securityFindings.length > 0 || logicFindings.length > 0;
-  const prompt = hasIssues
-    ? `
-You are a Staff Software Engineer and Open Source Maintainer.
+  const filesList = filePaths && filePaths.length > 0 ? filePaths.join(", ") : "None";
+  const diffSample = diff ? diff.slice(0, 4000) : "No diff payload provided.";
 
-Your task is to produce a professional GitHub Pull Request review based ONLY on the findings provided below.
+  const prompt = `
+You are a Principal Software Engineer and Open Source Maintainer.
+Your task is to produce a high-quality, professional GitHub Pull Request review report based on the provided PR details, code diff, and identified analysis findings.
 
-PR Title:
-${prTitle}
+PR Details:
+- Repository Name: ${repositoryName}
+- Pull Request Number: #${prNumber}
+- PR Title: ${prTitle}
+- PR Triage Category: ${triageCategory}
+- Changed Files: ${filesList}
 
-PR Category:
-${triageCategory}
+Identified Security Findings:
+${securityFindings.length > 0 ? securityFindings.map((f, i) => `${i + 1}. ${f}`).join("\n") : "None"}
 
-Security Findings:
-${securityFindings.length > 0
-      ? securityFindings.map((f) => `- ${f}`).join("\n")
-      : "None"
-    }
+Identified Logic & Code Quality Findings:
+${logicFindings.length > 0 ? logicFindings.map((f, i) => `${i + 1}. ${f}`).join("\n") : "None"}
 
-Logic Findings:
-${logicFindings.length > 0
-      ? logicFindings.map((f) => `- ${f}`).join("\n")
-      : "None"
-    }
+PR Code Diff Sample:
+\`\`\`diff
+${diffSample}
+\`\`\`
 
-IMPORTANT RULES:
+CRITICAL GENERATION RULES:
+1. Do not use generic filler sentences. Every sentence must be custom-tailored to this PR.
+2. Under "Summary", provide a brief 2-3 sentence overview explaining what this PR specifically does based on the changed files and diff.
+3. Under "🛡️ Security Findings", summarize each identified security vulnerability. If there are none, explicitly state "No security vulnerabilities were identified in the reviewed diff."
+4. Under "🧠 Logic & Code Quality Findings", describe the logical, performance, or code quality issues found. If there are none, explicitly state "No correctness or maintainability issues were identified."
+5. Provide a dynamic "Final Recommendation" based on the severity of the findings:
+   - If there are critical or high-severity findings: Recommendation is "Request Changes".
+   - If there are only medium or low findings: Recommendation is "Approve with Minor Changes".
+   - If there are no findings: Recommendation is "Approve".
+6. Provide a "Confidence Score" (a rating from 1 to 5, where 5 is maximum certainty) with a brief 1-sentence explanation of why you selected that score.
+7. Return ONLY valid, clean GitHub-ready Markdown. Do not wrap the whole response in markdown code fences (\`\`\`).
 
-1. Do not invent new findings.
-2. Do not speculate about code that was not reviewed.
-3. Only summarize the findings provided.
-4. Keep the review actionable and concise.
-5. Prioritize issues by severity and impact.
-6. Maintain a professional and collaborative tone.
-7. Assume the author is an experienced engineer.
-
-Generate GitHub-ready Markdown using the following structure:
+Generate the report using the following structure:
 
 # Pull Request Review Report
 
-## Summary
+## Metadata
+- **Repository:** ${repositoryName}
+- **Pull Request:** #${prNumber} - ${prTitle}
+- **Category:** ${triageCategory}
+- **Changed Files:** ${filesList}
 
-Provide a brief 2-3 sentence overview of the review.
+## Summary
+[Provide 2-3 customized sentences summarizing what this PR does and its impact.]
 
 ## 🛡️ Security Findings
-
-For each security finding:
-
-### Finding Title
-
-**Severity:** Low | Medium | High | Critical
-
-**Why it matters**
-Explain the risk.
-
-**Recommended Fix**
-Provide a specific action the developer can take.
-
-If there are no security findings, write:
-
-"No security vulnerabilities were identified in the reviewed diff."
+[Detail each security finding here with its Title, Severity, and Recommended Fix. Or write "No security vulnerabilities were identified in the reviewed diff."]
 
 ## 🧠 Logic & Code Quality Findings
-
-For each logic finding:
-
-### Finding Title
-
-**Why it matters**
-Explain the impact.
-
-**Recommended Fix**
-Provide a specific improvement.
-
-If there are no logic findings, write:
-
-"No correctness or maintainability issues were identified."
+[Detail each logic finding here with its Title, and Recommended Fix. Or write "No correctness or maintainability issues were identified."]
 
 ## Final Recommendation
+**Outcome:** [Approve | Approve with Minor Changes | Request Changes]
 
-Provide one of:
-
-* Approve
-* Approve with Minor Changes
-* Request Changes
-
-Base the recommendation only on the findings above.
-
-Return only valid GitHub Markdown.
-`  : `
-You are a Staff Software Engineer reviewing a Pull Request.
-
-PR Title:
-${prTitle}
-
-PR Category:
-${triageCategory}
-
-The review process did not identify any security, correctness, reliability, performance, or maintainability concerns.
-
-Generate a concise GitHub-ready Markdown review.
-
-Requirements:
-
-# Pull Request Review Report
-
-## Summary
-
-Briefly summarize the change.
-
-## Review Outcome
-
-State that no significant issues were detected in the reviewed diff.
-
-Mention that:
-
-* No security vulnerabilities were identified.
-* No correctness issues were identified.
-* No maintainability concerns were identified.
-
-## Recommendation
-
-Approve
-
-## Note
-
-Encourage normal human review and testing before merge.
-
-Tone:
-
-* Professional
-* Positive
-* Supportive
-
-Return only valid GitHub Markdown.
+## Confidence Score
+**Score:** [1-5]/5
+*Reason:* [1-sentence explanation]
 `;
 
   const response = await geminiModel.invoke(prompt);
@@ -152,5 +84,4 @@ Return only valid GitHub Markdown.
   return {
     finalReviewMarkdown: response.content.toString(),
   };
-
 };

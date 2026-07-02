@@ -241,6 +241,8 @@ export const handleGithubWebhook = async (
         console.log('Invoking LangGraph review workflow...');
         reviewResult = await compiledReviewWorkflow.invoke({
           prTitle,
+          prNumber: pullNumber,
+          repositoryName,
           prDescription,
           diff,
           filePaths, // Pass filePaths here

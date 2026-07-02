@@ -92,8 +92,9 @@ import { env } from "../../config/env.js";
 
 const isMockKey =
   !env.geminiApiKey ||
+  env.geminiApiKey.trim() === "" ||
   env.geminiApiKey.startsWith("mock_") ||
-  !env.geminiApiKey.startsWith("AIzaSy");
+  env.geminiApiKey === "your_api_key_here";
 
 /**
  * High-fidelity mock model for local development.
