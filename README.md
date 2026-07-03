@@ -158,6 +158,17 @@ Background Job Processing
 Review Caching & Deduplication
 Author
 
+## API shows "Offline" even though the backend is running
+
+If the backend `/health` endpoint works in the browser but the dashboard still shows "API Offline":
+
+- Disable ad blockers (uBlock Origin, AdBlock, Ghostery, etc.)
+- Disable privacy/security extensions temporarily
+- Open the application in an Incognito window without extensions
+- Check the browser console for `TypeError: Failed to fetch` or `(blocked:other)` network requests
+
+Some browser extensions can block background `fetch()` requests even though the endpoint is reachable directly.
+
 Gourish Prajapati
 
 Built as a full-stack AI engineering project combining GitHub automation, LangGraph workflows, and LLM-powered code analysis
