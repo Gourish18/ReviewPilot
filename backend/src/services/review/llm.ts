@@ -97,8 +97,10 @@ const isMockKey =
   !env.geminiApiKey ||
   env.geminiApiKey.trim() === "" ||
   env.geminiApiKey.startsWith("mock_") ||
-  env.geminiApiKey === "your_api_key_here" ||
-  !env.geminiApiKey.startsWith("AIzaSy");
+  env.geminiApiKey === "your_api_key_here";
+
+// Log which LLM mode is active at startup (never print the actual key)
+console.log(isMockKey ? "[LLM] Using MOCK LLM (no valid API key configured)" : "[LLM] Using Gemini (live API key detected)");
 
 /**
  * High-fidelity mock model for local development.

@@ -188,7 +188,7 @@ export default function HistoryPage() {
                     <td className="p-4 text-right">
                       {log.status === 'completed' ? (
                         <Link
-                          href={`/dashboard/pr/${log.id}`}
+                          href={`/dashboard/reviews/${log.id}`}
                           className="border border-neutral-800 bg-black hover:bg-neutral-900 hover:border-neutral-700 text-neutral-300 text-xs px-3 py-1.5 rounded transition-colors inline-flex items-center gap-1 cursor-pointer"
                         >
                           Report <ArrowUpRight className="w-3.5 h-3.5" />

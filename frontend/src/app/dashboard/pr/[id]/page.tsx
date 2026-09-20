@@ -1,107 +1,158 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
 import { 
   ArrowLeft, 
   GitPullRequest, 
   ShieldAlert, 
   Sparkles, 
   CheckCircle,
-  FileCode,
-  AlertTriangle,
+  AlertCircle,
+  ExternalLink,
+  Calendar,
+  Tag,
   Info,
-  ChevronRight,
-  ExternalLink
+  RefreshCw
 } from 'lucide-react';
+import { useAuth } from '@/context/auth-context';
+import { API_URL } from '@/config';
 
-interface Comment {
+interface ReviewDetail {
   id: string;
-  filePath: string;
-  lineNumber: number;
-  diffContext: string[];
-  severity: 'error' | 'warning' | 'info';
-  category: string;
-  message: string;
-  suggestion?: string;
+  repositoryId: string;
+  repositoryName: string;
+  repositoryOwner: string;
+  repositoryFullName: string;
+  prNumber: number;
+  prTitle: string;
+  commitSha: string | null;
+  status: 'pending' | 'completed' | 'failed';
+  triageCategory: string | null;
+  securityFindings: string[];
+  logicFindings: string[];
+  markdownReport: string;
+  createdAt: string;
+  updatedAt: string;
 }
-const API_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
+
 export default function PRReportPage() {
   const params = useParams();
   const prId = params.id as string;
+  const { token } = useAuth();
 
-  // Mock data for the specific report
-  const [report] = useState({
-    id: prId,
-    title: 'feat: add security scanner node to review graph',
-    prNumber: 42,
-    repoOwner: 'octocat',
-    repoName: 'express-review-service',
-    status: 'completed',
-    score: 94,
-    commitSha: '6d8c4fa03a5e128b9d3c',
-    timeCompleted: '15 minutes ago',
-    summary: 'This pull request introduces a new dedicated `SecurityAgent` node into the LangGraph orchestration flow. It scans for hardcoded secrets, dangerous commands, and general security flaws using structured schemas before passing state to the Aggregator. The code is highly modular, well-tested, and conforms to standard TypeScript schemas.',
-    securitySummary: 'No critical exposed secrets detected. One minor warning flagged for local fallback logic.',
-    qualitySummary: 'Excellent logical layout. Style is clean, functions are fully type hinted, and all dependencies are explicitly defined.',
+  // Fetch single review detail by ID from the real backend API
+  const { 
+    data: review, 
+    isLoading, 
+    isError, 
+    error,
+    refetch,
+    isFetching
+  } = useQuery<ReviewDetail>({
+    queryKey: ['review_detail', prId, token],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/api/reviews/${prId}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('Review report not found or you do not have permission to view it.');
+        }
+        throw new Error('Failed to retrieve the review details from the server.');
+      }
+      return res.json();
+    },
+    enabled: !!token && !!prId,
   });
 
-  const [comments, setComments] = useState<Comment[]>([
-    {
-      id: 'c1',
-      filePath: 'src/agents/security.ts',
-      lineNumber: 26,
-      diffContext: [
-        '24: export const scanSecrets = (diffContent: string) => {',
-        '25:   // Scan for API keys',
-        '26:   const apiKey = process.env.GEMINI_API_KEY_SECURE || "fallback_local_key";',
-        '27:   if (!apiKey) return [];',
-        '28: };'
-      ],
-      severity: 'warning',
-      category: 'Security',
-      message: 'Avoid defining inline fallback strings for credentials. Even if it is a local key, it should be fetched from configuration settings or standard environment loaders to prevent accidental commits of test secrets.',
-      suggestion: 'const apiKey = config.gemini.apiKey ?? null;'
-    },
-    {
-      id: 'c2',
-      filePath: 'src/routes/health.routes.ts',
-      lineNumber: 48,
-      diffContext: [
-        '46: router.get("/health", (_req, res) => {',
-        '47:   const timestamp = Date.now();',
-        '48:   res.json({ status: "healthy", timestamp });',
-        '49: });'
-      ],
-      severity: 'info',
-      category: 'Style',
-      message: 'Consider defining typed response contracts for API endpoints rather than returning unstructured objects. This keeps the Express API clear and predictable.',
-      suggestion: 'type HealthStatusResponse = { status: string; timestamp: number }'
-    }
-  ]);
+  // Loading State (Skeleton UI)
+  if (isLoading) {
+    return (
+      <div className="space-y-10">
+        <div className="flex items-center justify-between">
+          <div className="w-28 h-4 bg-neutral-900 rounded animate-pulse" />
+          <div className="w-40 h-8 bg-neutral-900 rounded animate-pulse" />
+        </div>
+        <div className="border border-neutral-900 bg-neutral-950 p-8 rounded-lg space-y-4">
+          <div className="space-y-2">
+            <div className="w-3/4 h-8 bg-neutral-900 rounded animate-pulse" />
+            <div className="w-1/3 h-4 bg-neutral-900 rounded animate-pulse" />
+          </div>
+          <div className="h-px bg-neutral-900 pt-4" />
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-4">
+            {Array.from({ length: 3 }).map((_, idx) => (
+              <div key={idx} className="space-y-2">
+                <div className="w-16 h-3 bg-neutral-900 rounded animate-pulse" />
+                <div className="w-24 h-5 bg-neutral-900 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-1 space-y-6">
+            <div className="h-40 bg-neutral-900 rounded-lg border border-neutral-900 animate-pulse" />
+            <div className="h-40 bg-neutral-900 rounded-lg border border-neutral-900 animate-pulse" />
+          </div>
+          <div className="lg:col-span-2 h-96 bg-neutral-900 rounded-lg border border-neutral-900 animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
-  const getSeverityStyles = (severity: 'error' | 'warning' | 'info') => {
-    switch (severity) {
-      case 'error':
-        return {
-          bg: 'bg-red-950/20 border-red-900/60',
-          text: 'text-red-400',
-          badge: 'bg-red-950 border-red-900 text-red-400'
-        };
-      case 'warning':
-        return {
-          bg: 'bg-amber-950/20 border-amber-900/60',
-          text: 'text-amber-400',
-          badge: 'bg-amber-950 border-amber-900 text-amber-400'
-        };
-      case 'info':
-        return {
-          bg: 'bg-neutral-900 border-neutral-800',
-          text: 'text-neutral-300',
-          badge: 'bg-neutral-900 border-neutral-800 text-neutral-400'
-        };
+  // Error State
+  if (isError || !review) {
+    return (
+      <div className="space-y-6">
+        <Link 
+          href="/dashboard"
+          className="text-xs text-neutral-400 hover:text-white transition-colors flex items-center gap-1.5"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Dashboard
+        </Link>
+
+        <div className="border border-red-950 bg-red-950/15 p-8 rounded-lg flex flex-col items-center text-center max-w-2xl mx-auto space-y-4">
+          <AlertCircle className="w-10 h-10 text-red-500" />
+          <div className="space-y-1.5">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-red-400">Failed to Load Report</h3>
+            <p className="text-xs text-neutral-400 max-w-md leading-relaxed">
+              {error?.message || 'An error occurred while fetching the review. Please ensure you own the repository and try again.'}
+            </p>
+          </div>
+          <div className="flex gap-4 pt-2">
+            <button
+              onClick={() => refetch()}
+              className="border border-neutral-800 bg-black hover:bg-neutral-900 text-white text-xs px-4 py-2 rounded transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
+              Retry Fetch
+            </button>
+            <Link
+              href="/dashboard"
+              className="bg-white text-black font-semibold text-xs px-4 py-2 rounded hover:bg-neutral-200 transition-colors cursor-pointer"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Status Style Resolver
+  const getStatusBadgeStyles = (status: 'pending' | 'completed' | 'failed') => {
+    switch (status) {
+      case 'completed':
+        return 'text-emerald-500 bg-emerald-950/10 border-emerald-950/80';
+      case 'pending':
+        return 'text-amber-500 bg-amber-950/10 border-amber-950/80 animate-pulse';
+      case 'failed':
+        return 'text-red-500 bg-red-950/10 border-red-950/80';
     }
   };
 
@@ -116,150 +167,155 @@ export default function PRReportPage() {
           <ArrowLeft className="w-4 h-4" /> Back to Dashboard
         </Link>
 
-        <a 
-          href={`https://github.com/${report.repoOwner}/${report.repoName}/pull/${report.prNumber}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="border border-neutral-900 bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white text-xs px-3.5 py-2 rounded transition-colors flex items-center gap-1.5 cursor-pointer"
-        >
-          View Pull Request on GitHub <ExternalLink className="w-3.5 h-3.5" />
-        </a>
+        {review.repositoryOwner && review.repositoryName && (
+          <a 
+            href={`https://github.com/${review.repositoryOwner}/${review.repositoryName}/pull/${review.prNumber}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="border border-neutral-900 bg-neutral-950 hover:bg-neutral-900 text-neutral-300 hover:text-white text-xs px-3.5 py-2 rounded transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            View Pull Request on GitHub <ExternalLink className="w-3.5 h-3.5" />
+          </a>
+        )}
       </div>
 
       {/* Header Info Block */}
       <div className="border border-neutral-900 bg-neutral-950 p-8 rounded-lg">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="text-2xl font-semibold text-white tracking-tight">
-                {report.title}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 mb-6">
+          <div className="space-y-2 min-w-0">
+            <div className="flex items-center gap-3 flex-wrap">
+              <span className="text-2xl font-semibold text-white tracking-tight leading-tight">
+                {review.prTitle}
               </span>
-              <span className="text-xs font-mono text-neutral-500">
-                #{report.prNumber}
+              <span className="text-xs font-mono text-neutral-500 shrink-0">
+                #{review.prNumber}
               </span>
             </div>
-            <p className="text-xs text-neutral-500">
-              {report.repoOwner}/{report.repoName} • Commit: <code className="bg-neutral-900 px-1 rounded">{report.commitSha.substring(0, 7)}</code>
+            <p className="text-xs text-neutral-400 flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-neutral-300">{review.repositoryFullName}</span>
+              {review.commitSha && (
+                <>
+                  <span>•</span>
+                  <span>Commit: <code className="bg-neutral-900 px-1.5 py-0.5 rounded text-neutral-300 font-mono">{review.commitSha.substring(0, 7)}</code></span>
+                </>
+              )}
             </p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="flex flex-col items-start sm:items-end">
-              <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500">Scorecard</span>
-              <div className="flex items-baseline gap-1 mt-0.5">
-                <span className="text-3xl font-mono font-bold text-white">{report.score}</span>
-                <span className="text-xs text-neutral-500">/100</span>
-              </div>
-            </div>
+          <div className="flex items-center gap-4 shrink-0">
+            <span className={`text-[10px] uppercase font-bold tracking-wide px-2.5 py-1 rounded border ${getStatusBadgeStyles(review.status)}`}>
+              {review.status}
+            </span>
           </div>
         </div>
 
         {/* Tabular review stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6 border-t border-neutral-900">
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500">Security Check</span>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <CheckCircle className="w-4 h-4" /> Passed with Warnings
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 pt-6 border-t border-neutral-900 text-xs">
+          <div className="space-y-1.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 block">Triage Category</span>
+            <div className="flex items-center gap-1.5 text-neutral-300 font-semibold">
+              <Tag className="w-4 h-4 text-neutral-400" />
+              <span className="uppercase tracking-wider">{review.triageCategory || 'General'}</span>
             </div>
           </div>
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500">Code Quality</span>
-            <div className="flex items-center gap-1.5 text-xs text-emerald-400">
-              <CheckCircle className="w-4 h-4" /> Good Structure
+          <div className="space-y-1.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 block">Audit Executed</span>
+            <div className="flex items-center gap-1.5 text-neutral-300 font-semibold">
+              <Calendar className="w-4 h-4 text-neutral-400" />
+              <span>{new Date(review.createdAt).toLocaleDateString(undefined, { dateStyle: 'medium' })}</span>
             </div>
           </div>
-          <div className="space-y-1">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500">Analysis Time</span>
-            <div className="flex items-center gap-1.5 text-xs text-neutral-300">
-              Completed {report.timeCompleted}
+          <div className="space-y-1.5">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-neutral-500 block">Code Analysis</span>
+            <div className="flex items-center gap-1.5 text-neutral-300 font-semibold">
+              <GitPullRequest className="w-4 h-4 text-neutral-400" />
+              <span>AI Multi-Agent Review</span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Structured Reports Detail Grid */}
+      {/* Main Grid: Findings (Left) & Markdown Report (Right) */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
-        {/* Left Side: Summaries */}
+        {/* Left Column: Security and Logic Findings */}
         <div className="lg:col-span-1 space-y-6">
-          <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">AI Summary</h2>
-            <p className="text-xs text-neutral-300 leading-relaxed font-sans">
-              {report.summary}
-            </p>
+          
+          {/* Security Findings Card */}
+          <div className="border border-neutral-900 bg-neutral-950 rounded-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <ShieldAlert className="w-4 h-4 text-red-500" />
+                Security Risks
+              </h3>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.2 rounded ${
+                review.securityFindings.length > 0 ? 'bg-red-950 text-red-400' : 'bg-neutral-900 text-neutral-500'
+              }`}>
+                {review.securityFindings.length}
+              </span>
+            </div>
+            
+            {review.securityFindings.length > 0 ? (
+              <ul className="space-y-3">
+                {review.securityFindings.map((finding, idx) => (
+                  <li key={idx} className="flex items-start gap-2.5 text-xs text-neutral-300 leading-relaxed border-l-2 border-red-900/60 pl-3 py-0.5">
+                    {finding}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-neutral-500 italic">No security findings detected.</p>
+            )}
           </div>
 
-          <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
-            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Security Audit</h2>
-            <p className="text-xs text-neutral-300 leading-relaxed font-sans">
-              {report.securitySummary}
-            </p>
+          {/* Logic/Correctness Findings Card */}
+          <div className="border border-neutral-900 bg-neutral-950 rounded-lg p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400 flex items-center gap-1.5">
+                <Sparkles className="w-4 h-4 text-amber-500" />
+                Code Logic & Structure
+              </h3>
+              <span className={`text-[10px] font-mono font-bold px-2 py-0.2 rounded ${
+                review.logicFindings.length > 0 ? 'bg-amber-950 text-amber-400' : 'bg-neutral-900 text-neutral-500'
+              }`}>
+                {review.logicFindings.length}
+              </span>
+            </div>
+
+            {review.logicFindings.length > 0 ? (
+              <ul className="space-y-3">
+                {review.logicFindings.map((finding, idx) => (
+                  <li key={idx} className="flex items-start gap-2.5 text-xs text-neutral-300 leading-relaxed border-l-2 border-amber-900/60 pl-3 py-0.5">
+                    {finding}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-neutral-500 italic">No logic findings detected.</p>
+            )}
           </div>
+
         </div>
 
-        {/* Right Side: Code Inline Comments */}
-        <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-400">Detailed Code Findings</h2>
-          
-          <div className="space-y-6">
-            {comments.map((comment) => {
-              const styles = getSeverityStyles(comment.severity);
-              return (
-                <div 
-                  key={comment.id} 
-                  className={`border rounded-lg overflow-hidden bg-neutral-950/40 ${styles.bg}`}
-                >
-                  {/* File Path Header */}
-                  <div className="border-b border-neutral-900 px-4 py-2.5 bg-neutral-950 flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-xs font-mono text-neutral-400">
-                      <FileCode className="w-4 h-4 text-neutral-500" />
-                      <span>{comment.filePath} : Line {comment.lineNumber}</span>
-                    </div>
-                    
-                    <span className={`text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded border ${styles.badge}`}>
-                      {comment.severity}
-                    </span>
-                  </div>
+        {/* Right Column: Full Markdown Report */}
+        <div className="lg:col-span-2 space-y-4">
+          <div className="border border-neutral-900 bg-neutral-950 rounded-lg p-6 md:p-8 space-y-6">
+            <div className="border-b border-neutral-900 pb-4 flex items-center justify-between">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-neutral-400">
+                Detailed AI Report
+              </h3>
+            </div>
 
-                  {/* Diff Highlight block */}
-                  <div className="p-4 bg-black/60 border-b border-neutral-900 overflow-x-auto">
-                    <pre className="font-mono text-xs text-neutral-400 space-y-1">
-                      {comment.diffContext.map((line, idx) => {
-                        const isTarget = line.startsWith(`${comment.lineNumber}:`);
-                        return (
-                          <div 
-                            key={idx} 
-                            className={isTarget ? 'bg-neutral-900/60 text-white font-semibold py-0.5 px-2 -mx-2 border-l-2 border-white' : 'px-2'}
-                          >
-                            {line}
-                          </div>
-                        );
-                      })}
-                    </pre>
-                  </div>
-
-                  {/* Message body */}
-                  <div className="p-4 space-y-3 font-sans">
-                    <div className="flex items-start gap-2">
-                      {comment.severity === 'error' && <AlertTriangle className="w-4.5 h-4.5 text-red-400 shrink-0 mt-0.5" />}
-                      {comment.severity === 'warning' && <AlertTriangle className="w-4.5 h-4.5 text-amber-400 shrink-0 mt-0.5" />}
-                      {comment.severity === 'info' && <Info className="w-4.5 h-4.5 text-neutral-400 shrink-0 mt-0.5" />}
-                      
-                      <p className="text-xs text-neutral-300 leading-relaxed">
-                        {comment.message}
-                      </p>
-                    </div>
-
-                    {comment.suggestion && (
-                      <div className="bg-neutral-950 border border-neutral-900 p-3 rounded font-mono text-xs">
-                        <span className="text-[10px] text-neutral-500 uppercase tracking-wider block mb-1">Recommended Fix</span>
-                        <code className="text-neutral-200">{comment.suggestion}</code>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {review.markdownReport ? (
+              <article className="prose prose-invert max-w-none prose-xs sm:prose-sm prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-white prose-code:bg-neutral-900 prose-code:px-1 prose-code:rounded prose-pre:bg-black/50 prose-pre:border prose-pre:border-neutral-900">
+                <ReactMarkdown>{review.markdownReport}</ReactMarkdown>
+              </article>
+            ) : (
+              <div className="text-center py-12 text-xs text-neutral-500 flex flex-col items-center justify-center gap-2">
+                <Info className="w-6 h-6 text-neutral-600" />
+                <span>No compiled markdown report content found.</span>
+              </div>
+            )}
           </div>
         </div>
 
