@@ -2,9 +2,8 @@
 
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Layers, Search, Check, Plus, ShieldCheck, RefreshCw, AlertCircle, Loader2 } from 'lucide-react';
+import { Layers, Search, Check, Plus, ShieldCheck, RefreshCw, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
-import { API_URL } from '@/config';
 
 interface GitHubRepo {
   id: string | null;
@@ -17,18 +16,12 @@ interface GitHubRepo {
   language: string | null;
   private: boolean;
 }
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function RepositoriesPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
   const [searchQuery, setSearchQuery] = useState('');
-  
-  // connection step tracking states
-  const [connectingRepoId, setConnectingRepoId] = useState<number | null>(null);
-  const [connectionStep, setConnectionStep] = useState<string>('');
-  
-  // disconnection step tracking states
-  const [disconnectingRepoId, setDisconnectingRepoId] = useState<number | null>(null);
-  const [disconnectStep, setDisconnectStep] = useState<string>('');
 
   // 1. Fetch repositories from backend
   const {
@@ -59,14 +52,6 @@ export default function RepositoriesPage() {
   // 2. Connect repository mutation
   const connectMutation = useMutation({
     mutationFn: async (repo: { githubRepoId: number; owner: string; name: string }) => {
-      setConnectingRepoId(repo.githubRepoId);
-      setConnectionStep('Creating webhook...');
-      
-      // Delay to make step progression visible to user
-      await new Promise(resolve => setTimeout(resolve, 800));
-      setConnectionStep('Verifying webhook...');
-      await new Promise(resolve => setTimeout(resolve, 600));
-
       const res = await fetch(`${API_URL}/api/repositories/connect`, {
         method: 'POST',
         headers: {
@@ -76,38 +61,18 @@ export default function RepositoriesPage() {
         body: JSON.stringify({ github_id: repo.githubRepoId }),
       });
       if (!res.ok) {
-        let errMsg = 'Failed to connect repository.';
-        try {
-          const body = await res.json();
-          if (body && body.error) errMsg = body.error;
-        } catch {}
-        throw new Error(errMsg);
+        throw new Error('Failed to connect repository.');
       }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['github_repos'] });
-      setConnectionStep('Connected successfully!');
-      setTimeout(() => {
-        setConnectingRepoId(null);
-        setConnectionStep('');
-      }, 1500);
     },
-    onError: () => {
-      setTimeout(() => {
-        setConnectingRepoId(null);
-        setConnectionStep('');
-      }, 4000);
-    }
   });
 
   // 3. Disconnect repository mutation
   const disconnectMutation = useMutation({
     mutationFn: async (githubRepoId: number) => {
-      setDisconnectingRepoId(githubRepoId);
-      setDisconnectStep('Deleting webhook...');
-      await new Promise(resolve => setTimeout(resolve, 800));
-
       const res = await fetch(`${API_URL}/api/repositories/disconnect`, {
         method: 'POST',
         headers: {
@@ -117,29 +82,13 @@ export default function RepositoriesPage() {
         body: JSON.stringify({ github_id: githubRepoId }),
       });
       if (!res.ok) {
-        let errMsg = 'Failed to disconnect repository.';
-        try {
-          const body = await res.json();
-          if (body && body.error) errMsg = body.error;
-        } catch {}
-        throw new Error(errMsg);
+        throw new Error('Failed to disconnect repository.');
       }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['github_repos'] });
-      setDisconnectStep('Disconnected successfully.');
-      setTimeout(() => {
-        setDisconnectingRepoId(null);
-        setDisconnectStep('');
-      }, 1500);
     },
-    onError: () => {
-      setTimeout(() => {
-        setDisconnectingRepoId(null);
-        setDisconnectStep('');
-      }, 4000);
-    }
   });
 
   // 4. Sync repositories mutation using POST /api/repositories/sync
@@ -273,17 +222,7 @@ export default function RepositoriesPage() {
               </div>
 
               <div className="flex items-center gap-3 shrink-0">
-                {connectingRepoId === repo.githubRepoId ? (
-                  <div className="flex items-center gap-2 text-xs text-neutral-400 font-mono">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />
-                    <span>{connectionStep}</span>
-                  </div>
-                ) : disconnectingRepoId === repo.githubRepoId ? (
-                  <div className="flex items-center gap-2 text-xs text-neutral-400 font-mono">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin text-neutral-400" />
-                    <span>{disconnectStep}</span>
-                  </div>
-                ) : repo.isConnected ? (
+                {repo.isConnected ? (
                   <>
                     <div className="flex items-center gap-1.5 text-[10px] text-emerald-500 border border-emerald-950/60 bg-emerald-950/20 px-2.5 py-1 rounded-full">
                       <Check className="w-3 h-3" />

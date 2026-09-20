@@ -47,11 +47,15 @@ const testSettingsAndWebhooks = async () => {
   console.log('Default Provider:', settings.preferredLLMProvider);
   console.log('Default Model:', settings.preferredModel);
   console.log('Default Temperature:', settings.temperature);
+  console.log('Default Auto Review on PR Open:', settings.autoReviewOnPrOpen);
+  console.log('Default Auto Review on Sync:', settings.autoReviewOnSynchronize);
 
   console.log('\n--- TEST 2: Update UserSettings ---');
   settings.preferredLLMProvider = 'openai';
   settings.preferredModel = 'gpt-4o';
   settings.temperature = 0.7;
+  settings.autoReviewOnPrOpen = false;
+  settings.autoReviewOnSynchronize = false;
   await settings.save();
   console.log('UserSettings updated successfully.');
 
@@ -59,7 +63,14 @@ const testSettingsAndWebhooks = async () => {
   console.log('Updated Provider (Expected: openai):', updatedSettings?.preferredLLMProvider);
   console.log('Updated Model (Expected: gpt-4o):', updatedSettings?.preferredModel);
   console.log('Updated Temperature (Expected: 0.7):', updatedSettings?.temperature);
-  if (updatedSettings?.preferredLLMProvider === 'openai' && updatedSettings?.temperature === 0.7) {
+  console.log('Updated Auto Review on PR Open (Expected: false):', updatedSettings?.autoReviewOnPrOpen);
+  console.log('Updated Auto Review on Sync (Expected: false):', updatedSettings?.autoReviewOnSynchronize);
+  if (
+    updatedSettings?.preferredLLMProvider === 'openai' && 
+    updatedSettings?.temperature === 0.7 &&
+    updatedSettings?.autoReviewOnPrOpen === false &&
+    updatedSettings?.autoReviewOnSynchronize === false
+  ) {
     console.log('SUCCESS: Settings updated and verified.');
   } else {
     console.error('FAIL: Settings update validation failed.');
@@ -118,6 +129,105 @@ const testSettingsAndWebhooks = async () => {
     console.log('SUCCESS: Mock Webhook deleted and unlinked in database.');
   } else {
     console.error('FAIL: Webhook disconnection cleanup failed.');
+  }
+
+  console.log('\n--- TEST 6: Backend Registry & Request Validation ---');
+  const { updateUserSettings, getSupportedProviders } = await import('./controllers/settings.controller.js');
+  
+  // Test getSupportedProviders
+  let providersResJson: any = null;
+  const mockProvidersReq = {} as any;
+  const mockProvidersRes = {
+    status: (code: number) => {
+      return {
+        json: (data: any) => {
+          providersResJson = data;
+        }
+      };
+    }
+  } as any;
+  await getSupportedProviders(mockProvidersReq, mockProvidersRes);
+  console.log('Providers registry endpoint returned status 200.');
+  console.log('Supported Providers list length:', providersResJson?.providers?.length);
+  if (providersResJson?.providers?.length > 0) {
+    console.log('SUCCESS: Providers registry verified.');
+  } else {
+    console.error('FAIL: Providers registry returned empty.');
+  }
+
+  // Test invalid provider validation in updateUserSettings
+  let errorStatus: number = 200;
+  let errorMsg: string = '';
+  const mockReqInvalidProvider = {
+    userId: user._id,
+    body: { preferredLLMProvider: 'abc' }
+  } as any;
+  const mockResInvalidProvider = {
+    status: (code: number) => {
+      errorStatus = code;
+      return {
+        json: (data: any) => {
+          errorMsg = data.error;
+        }
+      };
+    }
+  } as any;
+  await updateUserSettings(mockReqInvalidProvider, mockResInvalidProvider);
+  console.log(`Validation result for invalid provider: status = ${errorStatus}, msg = "${errorMsg}"`);
+  if (errorStatus === 400 && errorMsg.includes('Invalid provider')) {
+    console.log('SUCCESS: Rejected invalid provider correctly.');
+  } else {
+    console.error('FAIL: Allowed invalid provider.');
+  }
+
+  // Test disabled provider validation
+  let disabledStatus: number = 200;
+  let disabledMsg: string = '';
+  const mockReqDisabledProvider = {
+    userId: user._id,
+    body: { preferredLLMProvider: 'openai' }
+  } as any;
+  const mockResDisabledProvider = {
+    status: (code: number) => {
+      disabledStatus = code;
+      return {
+        json: (data: any) => {
+          disabledMsg = data.error;
+        }
+      };
+    }
+  } as any;
+  await updateUserSettings(mockReqDisabledProvider, mockResDisabledProvider);
+  console.log(`Validation result for disabled provider: status = ${disabledStatus}, msg = "${disabledMsg}"`);
+  if (disabledStatus === 400 && disabledMsg.includes('coming soon')) {
+    console.log('SUCCESS: Rejected disabled provider correctly.');
+  } else {
+    console.error('FAIL: Allowed disabled provider.');
+  }
+
+  // Test invalid model validation
+  let modelStatus: number = 200;
+  let modelMsg: string = '';
+  const mockReqInvalidModel = {
+    userId: user._id,
+    body: { preferredLLMProvider: 'gemini', preferredModel: 'xyz' }
+  } as any;
+  const mockResInvalidModel = {
+    status: (code: number) => {
+      modelStatus = code;
+      return {
+        json: (data: any) => {
+          modelMsg = data.error;
+        }
+      };
+    }
+  } as any;
+  await updateUserSettings(mockReqInvalidModel, mockResInvalidModel);
+  console.log(`Validation result for invalid model: status = ${modelStatus}, msg = "${modelMsg}"`);
+  if (modelStatus === 400 && modelMsg.includes('Invalid model')) {
+    console.log('SUCCESS: Rejected invalid model correctly.');
+  } else {
+    console.error('FAIL: Allowed invalid model.');
   }
 
   // Cleanup testing entries

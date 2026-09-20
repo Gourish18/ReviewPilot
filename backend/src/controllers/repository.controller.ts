@@ -248,6 +248,10 @@ export const connectRepository = async (
     // 5. Update connection and webhook details in database
     repository.isConnected = true;
     repository.webhookId = webhookId;
+    repository.webhookUrl = `${env.backendUrl}/api/webhooks/github`;
+    repository.webhookActive = true;
+    repository.connectedAt = new Date();
+    repository.lastWebhookVerification = new Date();
     await repository.save();
 
     res.status(200).json({
@@ -261,6 +265,10 @@ export const connectRepository = async (
         private: repository.private,
         isConnected: repository.isConnected,
         webhookId: repository.webhookId,
+        webhookUrl: repository.webhookUrl,
+        webhookActive: repository.webhookActive,
+        connectedAt: repository.connectedAt,
+        lastWebhookVerification: repository.lastWebhookVerification,
         createdAt: repository.createdAt,
         updatedAt: repository.updatedAt
       }
@@ -325,6 +333,10 @@ export const disconnectRepository = async (
     // 4. Update connection state in database
     repository.isConnected = false;
     repository.webhookId = null;
+    repository.webhookUrl = null;
+    repository.webhookActive = false;
+    repository.connectedAt = null;
+    repository.lastWebhookVerification = null;
     await repository.save();
 
     res.status(200).json({
@@ -338,6 +350,10 @@ export const disconnectRepository = async (
         private: repository.private,
         isConnected: repository.isConnected,
         webhookId: null,
+        webhookUrl: null,
+        webhookActive: false,
+        connectedAt: null,
+        lastWebhookVerification: null,
         createdAt: repository.createdAt,
         updatedAt: repository.updatedAt
       }

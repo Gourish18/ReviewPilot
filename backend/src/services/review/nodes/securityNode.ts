@@ -1,10 +1,21 @@
 import { z } from "zod"
 import type { ReviewState } from "../reviewState.js"
 import { getModelForUser } from "../llm.js"
+import { UserSettings } from "../../../models/UserSettings.js"
 const schema = z.object({
     findings: z.array(z.string()).describe("A list of security vulnerabilities found in the code. Empty array if none."),
 });
 export const securityNode = async (state: ReviewState): Promise<Partial<ReviewState>> => {
+    console.log(`[Security] START ${new Date().toISOString()}`);
+    if (state.userId) {
+        const settings = await UserSettings.findOne({ userId: state.userId });
+        if (settings && settings.enableSecurityReview === false) {
+            console.log('Skipping security review: disabled in user settings.');
+            console.log(`[Security] END ${new Date().toISOString()}`);
+            return { securityFindings: [] };
+        }
+    }
+
     const model = await getModelForUser(state.userId);
     const structuredLlm = model.withStructuredOutput(schema);
     const diffSample = state.diff.slice(0, 8000);
@@ -111,6 +122,7 @@ ${diffSample}
 
     const response = await structuredLlm.invoke(prompt);
 
+    console.log(`[Security] END ${new Date().toISOString()}`);
     return {
         securityFindings: response.findings,
     };

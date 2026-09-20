@@ -20,6 +20,8 @@ export interface IUserSettings {
     slack: boolean;
   };
   defaultRepositoryBehavior: 'opt-in' | 'opt-out';
+  autoReviewOnPrOpen: boolean;
+  autoReviewOnSynchronize: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -89,6 +91,14 @@ const userSettingsSchema = new Schema<IUserSettings>(
       type: String,
       enum: ['opt-in', 'opt-out'],
       default: 'opt-in',
+    },
+    autoReviewOnPrOpen: {
+      type: Boolean,
+      default: true,
+    },
+    autoReviewOnSynchronize: {
+      type: Boolean,
+      default: true,
     },
   },
   {

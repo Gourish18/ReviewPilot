@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { Repository } from '../models/Repository.js';
 import { User } from '../models/User.js';
 import { Review } from '../models/Review.js';
+import { UserSettings } from '../models/UserSettings.js';
 import { getPullRequestFiles } from '../services/githubPullRequest.service.js';
 import { getPullRequestDiff } from '../services/githubPr.service.js';
 import { verifyGithubSignature } from '../services/webhook.service.js';
@@ -168,6 +169,21 @@ export const handleGithubWebhook = async (
         return;
       }
 
+      // Retrieve UserSettings to check auto-trigger overrides (Part 14)
+      const settings = await UserSettings.findOne({ userId: repo.userId });
+      if (settings) {
+        if ((action === 'opened' || action === 'reopened') && settings.autoReviewOnPrOpen === false) {
+          console.log(`Auto review on PR open is disabled for user ${repo.userId}. Bypassing webhook event.`);
+          res.status(200).json({ ignored: true, reason: 'autoReviewOnPrOpen is disabled' });
+          return;
+        }
+        if (action === 'synchronize' && settings.autoReviewOnSynchronize === false) {
+          console.log(`Auto review on synchronize (commit push) is disabled for user ${repo.userId}. Bypassing webhook event.`);
+          res.status(200).json({ ignored: true, reason: 'autoReviewOnSynchronize is disabled' });
+          return;
+        }
+      }
+
       // Fetch files and diff patches from GitHub pulls API
       const owner = payload?.repository?.owner?.login || payload?.repository?.owner?.name;
       const repoName = payload?.repository?.name;
@@ -240,6 +256,7 @@ export const handleGithubWebhook = async (
         // Invoke the LangGraph review workflow
         console.log('Invoking LangGraph review workflow...');
         reviewResult = await compiledReviewWorkflow.invoke({
+          userId: repo.userId.toString(),
           prTitle,
           prNumber: pullNumber,
           repositoryName,
@@ -271,15 +288,19 @@ export const handleGithubWebhook = async (
         console.log('Review record updated to completed successfully.');
 
         // Publish the completed AI review back to GitHub Pull Request timeline as a comment
-        console.log('Publishing review comment to GitHub...');
-        await postReviewComment(
-          owner,
-          repoName,
-          pullNumber,
-          reviewResult.finalReviewMarkdown || '',
-          user.accessToken
-        );
-        console.log('GitHub review comment published successfully.');
+        if (settings && settings.enableComments === false) {
+          console.log('Skipping GitHub PR review comments: disabled in user settings.');
+        } else {
+          console.log('Publishing review comment to GitHub...');
+          await postReviewComment(
+            owner,
+            repoName,
+            pullNumber,
+            reviewResult.finalReviewMarkdown || '',
+            user.accessToken
+          );
+          console.log('GitHub review comment published successfully.');
+        }
       } catch (err: any) {
         console.error('PR review pipeline execution encountered an error:', err);
         

@@ -26,7 +26,8 @@ interface Comment {
   message: string;
   suggestion?: string;
 }
-
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000';
 export default function PRReportPage() {
   const params = useParams();
   const prId = params.id as string;

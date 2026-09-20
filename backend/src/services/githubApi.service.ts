@@ -214,7 +214,21 @@ export async function createOrUpdateWebhook(
       throw new Error(`GitHub API error updating webhook: ${updateRes.status} ${updateRes.statusText}`);
     }
 
-    return existingHook.id;
+    const updatedHook = await updateRes.json();
+    if (!updatedHook || typeof updatedHook.id !== 'number') {
+      throw new Error('Webhook verification failed: updated webhook has no valid ID.');
+    }
+    if (updatedHook.active !== true) {
+      throw new Error('Webhook verification failed: updated webhook is inactive.');
+    }
+    if (!updatedHook.config || updatedHook.config.url !== payloadUrl) {
+      throw new Error('Webhook verification failed: updated webhook URL mismatch.');
+    }
+    if (!updatedHook.config || !updatedHook.config.secret) {
+      throw new Error('Webhook verification failed: updated webhook secret configuration is missing.');
+    }
+
+    return updatedHook.id;
   }
 
   // 2. Create new webhook
@@ -245,6 +259,19 @@ export async function createOrUpdateWebhook(
   }
 
   const newHook = await createRes.json();
+  if (!newHook || typeof newHook.id !== 'number') {
+    throw new Error('Webhook verification failed: created webhook has no valid ID.');
+  }
+  if (newHook.active !== true) {
+    throw new Error('Webhook verification failed: created webhook is inactive.');
+  }
+  if (!newHook.config || newHook.config.url !== payloadUrl) {
+    throw new Error('Webhook verification failed: created webhook URL mismatch.');
+  }
+  if (!newHook.config || !newHook.config.secret) {
+    throw new Error('Webhook verification failed: created webhook secret configuration is missing.');
+  }
+
   return newHook.id;
 }
 

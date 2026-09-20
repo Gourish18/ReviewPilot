@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { ReviewState } from "../reviewState.js";
 import { getModelForUser } from "../llm.js";
+import { UserSettings } from "../../../models/UserSettings.js";
 
 const schema = z.object({
     findings: z
@@ -13,6 +14,28 @@ const schema = z.object({
 export const logicNode = async (
     state: ReviewState
 ): Promise<Partial<ReviewState>> => {
+    console.log(`[Logic] START ${new Date().toISOString()}`);
+    let instructions = "";
+    if (state.userId) {
+        const settings = await UserSettings.findOne({ userId: state.userId });
+        if (settings) {
+            if (settings.enableLogicReview === false && settings.enableArchitectureReview === false && settings.enablePerformanceReview === false) {
+                console.log('Skipping logic/architecture/performance review: all disabled in user settings.');
+                console.log(`[Logic] END ${new Date().toISOString()}`);
+                return { logicFindings: [] };
+            }
+            if (settings.enableLogicReview === false) {
+                instructions += "\n- Do NOT report basic correctness, condition, validation, or logical code bugs.";
+            }
+            if (settings.enableArchitectureReview === false) {
+                instructions += "\n- Do NOT perform architectural structure analysis, modularity reviews, or design pattern checks.";
+            }
+            if (settings.enablePerformanceReview === false) {
+                instructions += "\n- Do NOT scan for computational efficiency, unnecessary loop rendering, or database query performance bottlenecks.";
+            }
+        }
+    }
+
     const model = await getModelForUser(state.userId);
     const structuredLlm = model.withStructuredOutput(schema);
     const diffSample = state.diff.slice(0, 8000);
@@ -23,7 +46,7 @@ You are a Staff Software Engineer performing a pull request review.
 Your job is to review ONLY the code that appears in the provided diff.
 
 CRITICAL RULES:
-
+${instructions}
 1. Do NOT speculate about code that is not visible in the diff.
 2. Do NOT assume the existence of databases, APIs, secrets, authentication systems, or infrastructure unless they explicitly appear in the diff.
 3. Every finding must be directly supported by evidence from the diff.
@@ -99,6 +122,7 @@ ${diffSample}
 
     const response = await structuredLlm.invoke(prompt);
 
+    console.log(`[Logic] END ${new Date().toISOString()}`);
     return {
         logicFindings: response.findings,
     };

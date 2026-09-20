@@ -97,7 +97,8 @@ const isMockKey =
   !env.geminiApiKey ||
   env.geminiApiKey.trim() === "" ||
   env.geminiApiKey.startsWith("mock_") ||
-  env.geminiApiKey === "your_api_key_here";
+  env.geminiApiKey === "your_api_key_here" ||
+  !env.geminiApiKey.startsWith("AIzaSy");
 
 /**
  * High-fidelity mock model for local development.

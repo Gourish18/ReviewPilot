@@ -2,7 +2,8 @@
 
 import React, { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-
+const API_URL =
+  process.env.NEXT_PUBLIC_API_URL ;
 function AuthCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();

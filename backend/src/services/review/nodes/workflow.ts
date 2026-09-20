@@ -13,7 +13,8 @@ const workflow = new StateGraph(ReviewStateAnnotation)
     .addNode("summary", summaryNode)
     .addEdge(START, "triage")
     .addEdge("triage", "security")
-    .addEdge("security", "logic")
+    .addEdge("triage", "logic")
+    .addEdge("security", "summary")
     .addEdge("logic", "summary")
     .addEdge("summary", END);
 

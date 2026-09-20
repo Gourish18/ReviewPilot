@@ -4,6 +4,7 @@ import { getModelForUser } from "../llm.js";
 export const summaryNode = async (
   state: ReviewState
 ): Promise<Partial<ReviewState>> => {
+  console.log(`[Summary] START ${new Date().toISOString()}`);
   const {
     prTitle,
     prNumber,
@@ -82,6 +83,7 @@ Generate the report using the following structure:
   const model = await getModelForUser(state.userId);
   const response = await model.invoke(prompt);
 
+  console.log(`[Summary] END ${new Date().toISOString()}`);
   return {
     finalReviewMarkdown: response.content.toString(),
   };

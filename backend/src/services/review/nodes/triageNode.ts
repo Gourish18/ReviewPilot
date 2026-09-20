@@ -8,6 +8,7 @@ const VALID_CATEGORIES = [
     "general",
 ];
 export const triageNode = async (state: ReviewState): Promise<Partial<ReviewState>> => {
+    console.log(`[Triage] START ${new Date().toISOString()}`);
     const { prTitle, prDescription, diff, filePaths } = state;
     const diffSample = diff.slice(0, 2000);
     const filesList = filePaths && filePaths.length > 0 ? filePaths.join("\n") : "No file paths provided.";
@@ -115,6 +116,7 @@ general
     const response = await model.invoke(prompt);
     const category = response.content.toString().trim().toLowerCase();
 
+    console.log(`[Triage] END ${new Date().toISOString()}`);
     return {
         triageCategory: VALID_CATEGORIES.includes(
             category as (typeof VALID_CATEGORIES)[number]

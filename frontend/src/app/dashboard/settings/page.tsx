@@ -1,11 +1,10 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/context/auth-context';
 import { API_URL } from '@/config';
 import { 
-  Settings, 
   Save, 
   Sparkles, 
   Key, 
@@ -14,9 +13,24 @@ import {
   Check, 
   Loader2,
   Sliders,
-  Eye,
-  GitBranch
+  GitBranch,
+  Settings2
 } from 'lucide-react';
+
+interface ModelInfo {
+  id: string;
+  displayName: string;
+}
+
+interface ProviderInfo {
+  id: string;
+  displayName: string;
+  enabled: boolean;
+  models: ModelInfo[];
+  defaultTemperature: number;
+  maxTokens: number;
+  supportedFeatures: string[];
+}
 
 interface UserSettingsData {
   preferredLLMProvider: 'gemini' | 'openai' | 'anthropic' | 'local';
@@ -35,16 +49,46 @@ interface UserSettingsData {
     slack: boolean;
   };
   defaultRepositoryBehavior: 'opt-in' | 'opt-out';
+  autoReviewOnPrOpen: boolean;
+  autoReviewOnSynchronize: boolean;
 }
 
 export default function SettingsPage() {
   const { token } = useAuth();
   const queryClient = useQueryClient();
 
-  // 1. Load settings from backend via GET /api/settings
+  // State variables for dynamic LLM selectors
+  const [selectedProvider, setSelectedProvider] = useState<string>('gemini');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
+  const [temperature, setTemperature] = useState<number>(0.1);
+  const [maxTokens, setMaxTokens] = useState<number>(2048);
+
+  // 1. Fetch provider configurations from registry API (GET /api/settings/providers)
   const {
-    data,
-    isLoading,
+    data: providersData,
+    isLoading: isProvidersLoading
+  } = useQuery<{ success: boolean; providers: ProviderInfo[] }>({
+    queryKey: ['supported_providers', token],
+    queryFn: async () => {
+      const res = await fetch(`${API_URL}/api/settings/providers`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error('Failed to load supported providers from server.');
+      }
+      return res.json();
+    },
+    enabled: !!token,
+  });
+
+  const providers = providersData?.providers || [];
+
+  // 2. Fetch user settings
+  const {
+    data: settingsData,
+    isLoading: isSettingsLoading,
     isError,
     error
   } = useQuery<{ success: boolean; settings: UserSettingsData }>({
@@ -63,9 +107,31 @@ export default function SettingsPage() {
     enabled: !!token,
   });
 
-  const settings = data?.settings;
+  const settings = settingsData?.settings;
 
-  // 2. Save settings mutation via PUT /api/settings
+  // Initialize controlled states from settings once loaded
+  useEffect(() => {
+    if (settings) {
+      setSelectedProvider(settings.preferredLLMProvider);
+      setSelectedModel(settings.preferredModel);
+      setTemperature(settings.temperature);
+      setMaxTokens(settings.maxTokens);
+    }
+  }, [settings]);
+
+  // Handle provider changes and auto-populate defaults from registry
+  const handleProviderChange = (newProviderId: string) => {
+    setSelectedProvider(newProviderId);
+    const providerInfo = providers.find(p => p.id === newProviderId);
+    if (providerInfo) {
+      const defaultModel = providerInfo.models[0]?.id || '';
+      setSelectedModel(defaultModel);
+      setTemperature(providerInfo.defaultTemperature);
+      setMaxTokens(providerInfo.maxTokens);
+    }
+  };
+
+  // 3. Save settings mutation
   const saveMutation = useMutation({
     mutationFn: async (updatedSettings: Partial<UserSettingsData>) => {
       const res = await fetch(`${API_URL}/api/settings`, {
@@ -77,7 +143,12 @@ export default function SettingsPage() {
         body: JSON.stringify(updatedSettings),
       });
       if (!res.ok) {
-        throw new Error('Failed to save settings.');
+        let errMsg = 'Failed to save settings.';
+        try {
+          const body = await res.json();
+          if (body && body.error) errMsg = body.error;
+        } catch {}
+        throw new Error(errMsg);
       }
       return res.json();
     },
@@ -93,10 +164,10 @@ export default function SettingsPage() {
     const formData = new FormData(e.currentTarget);
     
     const payload: Partial<UserSettingsData> = {
-      preferredLLMProvider: formData.get('preferredLLMProvider') as any,
-      preferredModel: formData.get('preferredModel') as string,
-      temperature: parseFloat(formData.get('temperature') as string),
-      maxTokens: parseInt(formData.get('maxTokens') as string, 10),
+      preferredLLMProvider: selectedProvider as any,
+      preferredModel: selectedModel,
+      temperature: temperature,
+      maxTokens: maxTokens,
       reviewDepth: formData.get('reviewDepth') as any,
       enableSecurityReview: formData.get('enableSecurityReview') === 'on',
       enableLogicReview: formData.get('enableLogicReview') === 'on',
@@ -109,12 +180,18 @@ export default function SettingsPage() {
         slack: formData.get('notifySlack') === 'on',
       },
       defaultRepositoryBehavior: formData.get('defaultRepositoryBehavior') as any,
+      autoReviewOnPrOpen: formData.get('autoReviewOnPrOpen') === 'on',
+      autoReviewOnSynchronize: formData.get('autoReviewOnSynchronize') === 'on',
     };
 
     saveMutation.mutate(payload);
   };
 
-  if (isLoading) {
+  const activeProvider = providers.find(p => p.id === selectedProvider);
+
+  const isLoadingData = isProvidersLoading || isSettingsLoading;
+
+  if (isLoadingData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
         <Loader2 className="w-6 h-6 text-white animate-spin" />
@@ -158,25 +235,32 @@ export default function SettingsPage() {
               <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block">LLM Provider</label>
               <select
                 name="preferredLLMProvider"
-                defaultValue={settings.preferredLLMProvider}
+                value={selectedProvider}
+                onChange={(e) => handleProviderChange(e.target.value)}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-neutral-600"
               >
-                <option value="gemini">Google Gemini (Default)</option>
-                <option value="openai">OpenAI ChatGPT</option>
-                <option value="anthropic">Anthropic Claude</option>
-                <option value="local">Local LLM (Ollama/LM Studio)</option>
+                {providers.map(p => (
+                  <option key={p.id} value={p.id} disabled={!p.enabled}>
+                    {p.displayName} {!p.enabled ? ' (Coming Soon)' : ''}
+                  </option>
+                ))}
               </select>
             </div>
 
             <div className="space-y-2">
               <label className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider block">Model Choice</label>
-              <input
-                type="text"
+              <select
                 name="preferredModel"
-                defaultValue={settings.preferredModel}
-                placeholder="e.g. gemini-2.5-flash"
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-neutral-600 font-mono"
-              />
+              >
+                {activeProvider?.models.map(m => (
+                  <option key={m.id} value={m.id}>
+                    {m.displayName}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -189,15 +273,12 @@ export default function SettingsPage() {
                 min="0.0"
                 max="1.0"
                 step="0.05"
-                defaultValue={settings.temperature}
+                value={temperature}
                 className="w-full accent-white cursor-pointer bg-neutral-900 border border-neutral-800 rounded h-8 px-2"
-                onChange={(e) => {
-                  const valSpan = document.getElementById('temp-val-display');
-                  if (valSpan) valSpan.textContent = e.target.value;
-                }}
+                onChange={(e) => setTemperature(parseFloat(e.target.value))}
               />
               <p className="text-[10px] text-neutral-500">
-                Current Value: <span id="temp-val-display" className="font-mono text-neutral-300">{settings.temperature}</span> (Lower is more deterministic).
+                Current Value: <span className="font-mono text-neutral-300">{temperature}</span> (Lower is more deterministic).
               </p>
             </div>
 
@@ -206,7 +287,8 @@ export default function SettingsPage() {
               <input
                 type="number"
                 name="maxTokens"
-                defaultValue={settings.maxTokens}
+                value={maxTokens}
+                onChange={(e) => setMaxTokens(parseInt(e.target.value, 10))}
                 className="w-full bg-neutral-900 border border-neutral-800 rounded p-2 text-xs text-white focus:outline-none focus:border-neutral-600 font-mono"
               />
             </div>
@@ -316,7 +398,43 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Module 3: Repository Connection Config */}
+        {/* Module 3: Automation Triggers */}
+        <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
+          <div className="flex items-center gap-2 border-b border-neutral-900 pb-3">
+            <Settings2 className="w-4.5 h-4.5 text-neutral-300" />
+            <h2 className="text-xs font-bold uppercase tracking-wider text-neutral-200">Automation Trigger Events</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-neutral-900/40 transition-colors">
+              <input
+                type="checkbox"
+                name="autoReviewOnPrOpen"
+                defaultChecked={settings.autoReviewOnPrOpen}
+                className="accent-white cursor-pointer mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-semibold text-neutral-200 block">PR Open triggers Review</span>
+                <span className="text-[10px] text-neutral-500">Trigger analysis automatically when a Pull Request is opened or reopened.</span>
+              </div>
+            </label>
+
+            <label className="flex items-start gap-3 cursor-pointer p-2 rounded hover:bg-neutral-900/40 transition-colors">
+              <input
+                type="checkbox"
+                name="autoReviewOnSynchronize"
+                defaultChecked={settings.autoReviewOnSynchronize}
+                className="accent-white cursor-pointer mt-0.5"
+              />
+              <div>
+                <span className="text-xs font-semibold text-neutral-200 block">PR Push triggers Review</span>
+                <span className="text-[10px] text-neutral-500">Trigger analysis when new commits are pushed (synchronized) to an active PR.</span>
+              </div>
+            </label>
+          </div>
+        </div>
+
+        {/* Module 4: Repository Connection Config */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
           <div className="flex items-center gap-2 border-b border-neutral-900 pb-3">
             <GitBranch className="w-4.5 h-4.5 text-neutral-300" />
@@ -336,7 +454,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Module 4: Secrets Configuration */}
+        {/* Module 5: Secrets Configuration */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
           <div className="flex items-center gap-2 border-b border-neutral-900 pb-3">
             <Key className="w-4.5 h-4.5 text-neutral-300" />
@@ -360,7 +478,7 @@ export default function SettingsPage() {
           </div>
         </div>
 
-        {/* Module 5: Notifications */}
+        {/* Module 6: Notifications */}
         <div className="border border-neutral-900 bg-neutral-950 p-6 rounded-lg space-y-4">
           <div className="flex items-center gap-2 border-b border-neutral-900 pb-3">
             <Bell className="w-4.5 h-4.5 text-neutral-300" />

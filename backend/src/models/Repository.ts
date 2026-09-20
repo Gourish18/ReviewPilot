@@ -16,6 +16,10 @@ export interface IRepository {
   private: boolean;
   isConnected: boolean;
   webhookId?: number | null;
+  webhookUrl?: string | null;
+  webhookActive?: boolean;
+  connectedAt?: Date | null;
+  lastWebhookVerification?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -77,6 +81,26 @@ const repositorySchema = new Schema<IRepository>(
     // webhookId stores the GitHub webhook ID automatically provisioned for this repository
     webhookId: {
       type: Number,
+      default: null,
+    },
+    // webhookUrl is the backend endpoint URL registered for this repository webhook
+    webhookUrl: {
+      type: String,
+      default: null,
+    },
+    // webhookActive flags if the webhook is active on GitHub
+    webhookActive: {
+      type: Boolean,
+      default: false,
+    },
+    // connectedAt records the date the integration was activated
+    connectedAt: {
+      type: Date,
+      default: null,
+    },
+    // lastWebhookVerification is the timestamp of the last webhook check
+    lastWebhookVerification: {
+      type: Date,
       default: null,
     },
   },
