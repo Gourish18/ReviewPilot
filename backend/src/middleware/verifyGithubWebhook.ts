@@ -16,6 +16,8 @@ export const verifyGithubWebhook = (
   res: Response,
   next: NextFunction
 ): void => {
+  console.log(`[Webhook Middleware] Content-Type: ${req.headers['content-type']}, Body type: ${typeof req.body}, isBuffer: ${Buffer.isBuffer(req.body)}`);
+
   const signature = req.headers['x-hub-signature-256'] as string;
 
   // 1. Validate signature header presence

@@ -18,12 +18,17 @@ app.use(
   }),
 );
 
-app.use('/api/webhooks', webhookRouter);
+// 1. Raw body parser specifically and ONLY for the GitHub webhook endpoint
+// Must be registered BEFORE express.json() so GitHub webhooks are preserved as raw Buffers for HMAC signature verification
+app.use('/api/webhooks/github', express.raw({ type: 'application/json' }));
 
+// 2. Global JSON body parser for all other application routes
 app.use(express.json({
   limit: '1mb'
 }));
 
+// 3. Application Routes
+app.use('/api/webhooks', webhookRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/repositories', repositoryRouter);
 app.use('/api/reviews', reviewRouter);

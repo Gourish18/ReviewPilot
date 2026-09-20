@@ -21,6 +21,8 @@ export const handleGithubWebhook = async (
   res: Response
 ): Promise<void> => {
   try {
+    console.log(`[Webhook Controller] Received webhook. Body type: ${typeof req.body}, isBuffer: ${Buffer.isBuffer(req.body)}`);
+
     // 1. Extract and validate x-github-event header
     const event = req.headers['x-github-event'] as string;
     if (!event) {
@@ -28,29 +30,36 @@ export const handleGithubWebhook = async (
       return;
     }
 
-    // 2. Validate and verify signature (fallback for test environments without middleware)
+    // 2. Extract signature and verify against raw Buffer
     const signature = req.headers['x-hub-signature-256'] as string;
     if (!signature) {
       res.status(401).json({ error: 'Invalid webhook signature' });
       return;
     }
 
-    const rawBody = (req as any).rawBody || req.body;
-    if (!rawBody || !verifyGithubSignature(rawBody, signature)) {
+    const rawBody = req.body as Buffer;
+    if (!rawBody || !Buffer.isBuffer(rawBody)) {
+      console.error('Webhook payload is not a raw Buffer. Ensure raw body parser is configured.');
+      res.status(400).json({ error: 'Raw body parsing failed' });
+      return;
+    }
+
+    const isValid = verifyGithubSignature(rawBody, signature);
+    if (!isValid) {
+      console.warn('Webhook signature verification failed in controller.');
       res.status(401).json({ error: 'Invalid webhook signature' });
       return;
     }
 
-    // 3. Convert Buffer body to JSON payload if it is a Buffer
-    let payload = req.body;
-    if (Buffer.isBuffer(payload)) {
-      try {
-        const rawString = payload.toString('utf8');
-        payload = rawString ? JSON.parse(rawString) : {};
-      } catch (err) {
-        res.status(400).json({ error: 'Invalid JSON payload' });
-        return;
-      }
+    // 3. Parse JSON payload from the verified raw Buffer
+    let payload: any;
+    try {
+      const rawString = rawBody.toString('utf8');
+      payload = rawString ? JSON.parse(rawString) : {};
+    } catch (err) {
+      console.error('Failed to parse webhook JSON payload from buffer:', err);
+      res.status(400).json({ error: 'Invalid JSON payload' });
+      return;
     }
 
     const action = payload?.action;
@@ -236,7 +245,7 @@ export const handleGithubWebhook = async (
       console.log(diff);
 
       // Extract PR Title and Description from payload
-      const prTitle = payload?.pull_request?.title || '';
+      const prTitle = payload?.pull_request?.title?.trim() || `Pull Request #${pullNumber}`;
       const prDescription = payload?.pull_request?.body || '';
 
       // Create a Review document in MongoDB with status 'pending'
