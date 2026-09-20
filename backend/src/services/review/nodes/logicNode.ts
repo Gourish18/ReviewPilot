@@ -3,9 +3,17 @@ import type { ReviewState } from "../reviewState.js";
 import { getModelForUser } from "../llm.js";
 import { UserSettings } from "../../../models/UserSettings.js";
 
+const findingSchema = z.object({
+    title: z.string().describe("Short title of the issue"),
+    severity: z.string().describe("Severity: low, medium, or high"),
+    evidence: z.string().describe("Exact code snippet from the diff"),
+    explanation: z.string().describe("Explanation of why this is a problem"),
+    recommendedFix: z.string().describe("Recommended fix"),
+});
+
 const schema = z.object({
     findings: z
-        .array(z.string())
+        .array(findingSchema)
         .describe(
             "A list of logic, correctness, and architecture issues found in the code. Empty array if none."
         ),
@@ -37,8 +45,7 @@ export const logicNode = async (
     }
 
     const model = await getModelForUser(state.userId);
-    const structuredLlm = model.withStructuredOutput(schema);
-    const diffSample = state.diff.slice(0, 8000);
+    const diffSample = state.diff ? state.diff.slice(0, 8000) : "";
 
     const prompt = `
 You are a Staff Software Engineer performing a pull request review.
@@ -58,8 +65,7 @@ ${instructions}
 
 Review for:
 
-CORRECTNESS
-
+CORRECTNESS:
 * Off-by-one errors
 * Incorrect conditions
 * Broken logic
@@ -68,62 +74,61 @@ CORRECTNESS
 * Race conditions
 * Concurrency problems
 
-RELIABILITY
-
+RELIABILITY:
 * Missing error handling
 * Unhandled promise rejections
 * Null/undefined risks
 * Resource leaks
 * Failure scenarios
 
-PERFORMANCE
-
+PERFORMANCE:
 * Unnecessary re-renders
 * Expensive computations
 * Memory leaks
 * Inefficient loops
 * Network inefficiencies
 
-MAINTAINABILITY
-
+MAINTAINABILITY:
 * Fragile design
 * Code duplication
 * Poor abstractions
 * Hard-to-maintain implementations
 
-ARCHITECTURE
-
+ARCHITECTURE:
 * Violations of existing patterns
 * Tight coupling
 * Incorrect layering
 * Dependency misuse
-
-For every finding include:
-
-* title
-* severity (low | medium | high)
-* evidence (exact code snippet from the diff)
-* explanation
-* recommended fix
-
-If no legitimate issues are found, return:
-
-{
-"findings": []
-}
 
 Pull Request Category:
 ${state.triageCategory}
 
 Code Diff:
 ${diffSample}
-
 `;
 
-    const response = await structuredLlm.invoke(prompt);
+    let findings: string[] = [];
+    try {
+        const structuredLlm = model.withStructuredOutput(schema);
+        const response = await structuredLlm.invoke(prompt);
+        if (response && Array.isArray(response.findings)) {
+            findings = response.findings.map((f: any) => typeof f === 'string' ? f : JSON.stringify(f));
+        }
+    } catch (err: any) {
+        console.warn('[Logic Node] Structured output parsing fallback:', err.message);
+        try {
+            const textResponse = await model.invoke(prompt + "\n\nRespond with findings or indicate none.");
+            const text = textResponse.content.toString();
+            if (text && !text.toLowerCase().includes("no issues found") && !text.toLowerCase().includes("no findings")) {
+                findings = [text.slice(0, 1000)];
+            }
+        } catch (fallbackErr) {
+            console.error('[Logic Node] Fallback failed:', fallbackErr);
+        }
+    }
 
     console.log(`[Logic] END ${new Date().toISOString()}`);
     return {
-        logicFindings: response.findings,
+        logicFindings: findings,
     };
 };

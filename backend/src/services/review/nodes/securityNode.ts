@@ -2,9 +2,19 @@ import { z } from "zod"
 import type { ReviewState } from "../reviewState.js"
 import { getModelForUser } from "../llm.js"
 import { UserSettings } from "../../../models/UserSettings.js"
-const schema = z.object({
-    findings: z.array(z.string()).describe("A list of security vulnerabilities found in the code. Empty array if none."),
+const securityFindingSchema = z.object({
+    title: z.string().describe("Short vulnerability title"),
+    severity: z.string().describe("Severity: low, medium, high, or critical"),
+    evidence: z.string().describe("Exact code snippet from the diff"),
+    explanation: z.string().describe("Explanation of why this is a vulnerability"),
+    impact: z.string().optional().describe("Potential security impact"),
+    recommendation: z.string().describe("Concrete fix"),
 });
+
+const schema = z.object({
+    findings: z.array(securityFindingSchema).describe("A list of security vulnerabilities found in the code. Empty array if none."),
+});
+
 export const securityNode = async (state: ReviewState): Promise<Partial<ReviewState>> => {
     console.log(`[Security] START ${new Date().toISOString()}`);
     if (state.userId) {
@@ -17,8 +27,7 @@ export const securityNode = async (state: ReviewState): Promise<Partial<ReviewSt
     }
 
     const model = await getModelForUser(state.userId);
-    const structuredLlm = model.withStructuredOutput(schema);
-    const diffSample = state.diff.slice(0, 8000);
+    const diffSample = state.diff ? state.diff.slice(0, 8000) : "";
 
     const prompt = `
 You are a Senior Application Security Engineer performing a pull request security review.
@@ -38,8 +47,7 @@ CRITICAL RULES:
 
 Analyze the diff for:
 
-INPUT VALIDATION
-
+INPUT VALIDATION:
 * SQL Injection
 * NoSQL Injection
 * Command Injection
@@ -47,71 +55,38 @@ INPUT VALIDATION
 * Path Traversal
 * SSRF
 
-AUTHENTICATION & AUTHORIZATION
-
+AUTHENTICATION & AUTHORIZATION:
 * Missing authorization checks
 * Privilege escalation
 * Broken access control
 * IDOR vulnerabilities
 * Authentication bypasses
 
-SECRETS & SENSITIVE DATA
-
+SECRETS & SENSITIVE DATA:
 * Hardcoded credentials
 * API keys
 * Tokens
 * Secrets committed to source control
 * Sensitive information leakage
 
-WEB SECURITY
-
+WEB SECURITY:
 * Cross-Site Scripting (XSS)
 * CSRF vulnerabilities
 * Open Redirects
 * Unsafe HTML rendering
 
-CRYPTOGRAPHY
-
+CRYPTOGRAPHY:
 * Weak hashing
 * Weak encryption
 * Insecure token handling
 * Hardcoded cryptographic keys
 
-APPLICATION SECURITY
-
+APPLICATION SECURITY:
 * Unsafe deserialization
 * Prototype pollution
 * Security misconfigurations
 * Dangerous dependency usage
 * Insecure file handling
-
-For EACH finding return:
-
-{
-"title": "Short vulnerability title",
-"severity": "low | medium | high | critical",
-"evidence": "Exact code snippet from the diff",
-"explanation": "Why this is a vulnerability",
-"impact": "Potential security impact",
-"recommendation": "Concrete fix"
-}
-
-IMPORTANT:
-
-If the diff only contains:
-
-* logging statements
-* comments
-* formatting changes
-* refactoring without security impact
-* variable renames
-* UI text changes
-
-then return:
-
-{
-"findings": []
-}
 
 Pull Request Category:
 ${state.triageCategory}
@@ -120,10 +95,28 @@ Code Diff:
 ${diffSample}
 `;
 
-    const response = await structuredLlm.invoke(prompt);
+    let findings: string[] = [];
+    try {
+        const structuredLlm = model.withStructuredOutput(schema);
+        const response = await structuredLlm.invoke(prompt);
+        if (response && Array.isArray(response.findings)) {
+            findings = response.findings.map((f: any) => typeof f === 'string' ? f : JSON.stringify(f));
+        }
+    } catch (err: any) {
+        console.warn('[Security Node] Structured output parsing fallback:', err.message);
+        try {
+            const textResponse = await model.invoke(prompt + "\n\nRespond with security findings or indicate none.");
+            const text = textResponse.content.toString();
+            if (text && !text.toLowerCase().includes("no issues found") && !text.toLowerCase().includes("no vulnerabilities")) {
+                findings = [text.slice(0, 1000)];
+            }
+        } catch (fallbackErr) {
+            console.error('[Security Node] Fallback failed:', fallbackErr);
+        }
+    }
 
     console.log(`[Security] END ${new Date().toISOString()}`);
     return {
-        securityFindings: response.findings,
+        securityFindings: findings,
     };
 };   
